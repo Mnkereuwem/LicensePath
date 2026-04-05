@@ -1,4 +1,4 @@
--- LicensePath initial schema: multi-tenant ASW hour tracking with RLS-ready tables.
+-- License FYI initial schema: multi-tenant ASW hour tracking with RLS-ready tables.
 -- Map aggregates to official BBS Form 1800 at export time (PDF field names differ by revision).
 
 -- Extensions

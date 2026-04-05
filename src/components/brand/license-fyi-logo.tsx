@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 const sizes = { sm: 32, md: 40, lg: 52 } as const;
 
 /**
- * Custom mark: path with milestones — suggests progress toward licensure.
+ * Custom mark: path with milestones — progress toward licensure.
  */
-export function LicensePathLogo({
+export function LicenseFyiLogo({
   className,
   size = "md",
 }: {
@@ -30,7 +30,7 @@ export function LicensePathLogo({
     >
       <defs>
         <linearGradient
-          id={`licensepath-logo-stroke-${gradId}`}
+          id={`licensefyi-logo-stroke-${gradId}`}
           x1="6"
           y1="31"
           x2="32"
@@ -44,7 +44,7 @@ export function LicensePathLogo({
       </defs>
       <path
         d="M8 31.5C11.5 31.5 14 28.2 16.5 23.8 19 19.4 21.8 14.8 26.2 12.4 28.6 11.1 31.2 10 34 9.5"
-        stroke={`url(#licensepath-logo-stroke-${gradId})`}
+        stroke={`url(#licensefyi-logo-stroke-${gradId})`}
         strokeWidth="2.25"
         strokeLinecap="round"
         strokeLinejoin="round"

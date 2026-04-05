@@ -22,9 +22,28 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "LicensePath — ASW hour compliance",
+  metadataBase: new URL("https://license.fyi"),
+  title: {
+    default: "License FYI — ASW hour compliance",
+    template: "%s · License FYI",
+  },
   description:
-    "High-compliance hours tracking for Associate Social Workers pursuing California LCSW licensure.",
+    "Hours tracking for California Associate Clinical Social Workers—structured categories, weekly caps, and supervision cues. license.fyi",
+  openGraph: {
+    title: "License FYI — ASW hour compliance",
+    description:
+      "Structured hour logging for California ASWs on the path to LCSW. license.fyi",
+    url: "https://license.fyi",
+    siteName: "License FYI",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "License FYI — ASW hour compliance",
+    description:
+      "Structured hour logging for California ASWs. license.fyi",
+  },
 };
 
 export default function RootLayout({

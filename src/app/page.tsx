@@ -85,7 +85,7 @@ export default async function HomePage() {
                 Hour tracking that respects BBS math, not spreadsheet hope.
               </h1>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                LicensePath helps Associate Clinical Social Workers log
+                License FYI helps Associate Clinical Social Workers log
                 experience with guardrails for weekly caps, supervision ratios,
                 and the path to 3,000 hours—backed by Supabase auth, Row Level
                 Security, and audit-minded exports coming soon.
@@ -259,7 +259,7 @@ export default async function HomePage() {
               Use cases beyond “I like spreadsheets”
             </h2>
             <p className="text-muted-foreground mt-2 text-sm leading-relaxed sm:text-base">
-              LicensePath is for anyone who wants BBS-shaped structure from the
+              License FYI is for anyone who wants BBS-shaped structure from the
               start—not a prettified timesheet you’ll outgrow.
             </p>
           </div>
@@ -345,7 +345,10 @@ export default async function HomePage() {
 
       <footer className="border-border/60 border-t py-10">
         <div className="text-muted-foreground mx-auto flex max-w-6xl flex-col gap-2 px-4 text-xs sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>© {new Date().getFullYear()} LicensePath · Experience tracking only</p>
+          <p>
+            © {new Date().getFullYear()} License FYI · license.fyi · Experience
+            tracking only
+          </p>
           <p>Not legal advice; verify categories against current BBS regulations.</p>
         </div>
       </footer>

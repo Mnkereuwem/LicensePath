@@ -1,7 +1,7 @@
 import { createClient, type User } from "@supabase/supabase-js";
 
 /** Default org id — must match supabase/migrations. */
-export const LICENSEPATH_DEFAULT_ORG_ID =
+export const LICENSE_FYI_DEFAULT_ORG_ID =
   "a0000000-0000-4000-8000-000000000001";
 
 export function createServiceRoleClient() {
@@ -30,8 +30,8 @@ export async function ensureProfileForUser(user: User): Promise<
     const admin = createServiceRoleClient();
     const { error: orgErr } = await admin.from("organizations").upsert(
       {
-        id: LICENSEPATH_DEFAULT_ORG_ID,
-        name: "LicensePath default",
+        id: LICENSE_FYI_DEFAULT_ORG_ID,
+        name: "License FYI default",
       },
       { onConflict: "id" },
     );
@@ -57,7 +57,7 @@ export async function ensureProfileForUser(user: User): Promise<
     const { error: profileErr } = await admin.from("profiles").upsert(
       {
         id: user.id,
-        organization_id: LICENSEPATH_DEFAULT_ORG_ID,
+        organization_id: LICENSE_FYI_DEFAULT_ORG_ID,
         full_name: fullName,
         role: "supervisee",
       },

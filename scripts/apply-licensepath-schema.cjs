@@ -205,7 +205,7 @@ Looks like part of the schema is already there. Options:
   } else {
     console.log("\nDone.");
   }
-  console.log("Refresh http://127.0.0.1:3000/dashboard\n");
+  console.log("Refresh https://license.fyi or http://127.0.0.1:3000/dashboard\n");
 }
 
 main().catch((e) => {

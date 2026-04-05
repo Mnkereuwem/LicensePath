@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-import { LicensePathLogo } from "./licensepath-logo";
+import { LicenseFyiLogo } from "./license-fyi-logo";
 
 type BrandMarkProps = {
   /** Use `""` for a static mark (no link). Default `"/"`. */
@@ -45,10 +45,13 @@ export function BrandMark({
           boxClass,
         )}
       >
-        <LicensePathLogo size={logoSize} />
+        <LicenseFyiLogo size={logoSize} />
       </span>
       <span className="flex min-w-0 flex-col leading-none">
-        <span className={titleClass}>LicensePath</span>
+        <span className={titleClass}>
+          License{" "}
+          <span className="text-primary">FYI</span>
+        </span>
         {showTagline ? (
           <span
             className={cn(
@@ -58,9 +61,14 @@ export function BrandMark({
                 : "mt-0.5 text-[0.65rem] sm:text-xs",
             )}
           >
-            {isHero
-              ? "ASW hours & board readiness"
-              : "ASW hour compliance"}
+            {isHero ? (
+              <>
+                <span className="text-foreground/90 font-medium">license.fyi</span>
+                <span className="text-muted-foreground"> · ASW hours &amp; board readiness</span>
+              </>
+            ) : (
+              "license.fyi"
+            )}
           </span>
         ) : null}
       </span>
