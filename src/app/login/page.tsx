@@ -1,23 +1,15 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { ClipboardList } from "lucide-react";
 
+import { BrandMark } from "@/components/brand/brand-mark";
 import { LoginForm } from "@/components/auth/login-form";
 
 export default function LoginPage() {
   return (
-    <div className="from-background via-background relative min-h-screen bg-gradient-to-br to-teal-50/50 dark:to-teal-950/25">
-      <header className="border-border/60 bg-background/70 sticky top-0 z-10 border-b backdrop-blur">
+    <div className="from-background via-background relative min-h-screen bg-gradient-to-br to-primary/[0.06]">
+      <header className="border-border/50 bg-background/80 sticky top-0 z-10 border-b backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link
-            href="/"
-            className="text-foreground flex items-center gap-2 text-sm font-semibold"
-          >
-            <span className="bg-primary text-primary-foreground inline-flex size-8 items-center justify-center rounded-lg">
-              <ClipboardList className="size-4" aria-hidden />
-            </span>
-            LicensePath
-          </Link>
+          <BrandMark />
           <Link
             href="/register"
             className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
@@ -31,7 +23,7 @@ export default function LoginPage() {
           <p className="text-primary text-sm font-semibold tracking-wide uppercase">
             Secure ASW workspace
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-5xl sm:leading-tight">
             Hours that hold up in supervision and at the board.
           </h1>
           <p className="text-muted-foreground text-sm leading-relaxed">

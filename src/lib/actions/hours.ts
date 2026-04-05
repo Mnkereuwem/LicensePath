@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { WEEKLY_CREDIT_CAP } from "@/lib/compliance/bbs-rules";
 import type { HourCategoryKey } from "@/lib/hours/categories";
 import { HOUR_CATEGORY_KEYS } from "@/lib/hours/categories";
+import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function parseHours(input: Record<string, unknown>): Record<HourCategoryKey, number> {
@@ -76,14 +77,28 @@ export async function saveWeekHours(
     return { ok: false, message: "Not signed in." };
   }
 
-  const { data: profile, error: profileError } = await supabase
+  let { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("organization_id")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (profileError || !profile?.organization_id) {
-    return { ok: false, message: "Profile not found." };
+  let organizationId = profile?.organization_id ?? null;
+
+  if (profileError || !organizationId) {
+    const fixed = await ensureProfileForUser(user);
+    if (!fixed.ok) {
+      return { ok: false, message: fixed.message };
+    }
+    organizationId = fixed.organizationId;
+  }
+
+  if (!organizationId) {
+    return {
+      ok: false,
+      message:
+        "Profile not found after setup. Run the SQL migrations in supabase/migrations/ on your Supabase project.",
+    };
   }
 
   const hours = parseHours(rawInput);
@@ -105,7 +120,7 @@ export async function saveWeekHours(
     }
 
     const row = {
-      organization_id: profile.organization_id,
+      organization_id: organizationId,
       supervisee_id: user.id,
       week_start: weekStart,
       category: key,

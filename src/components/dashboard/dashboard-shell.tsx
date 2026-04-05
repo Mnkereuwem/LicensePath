@@ -2,6 +2,7 @@
 
 import { Menu } from "lucide-react";
 
+import { BrandMark } from "@/components/brand/brand-mark";
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -28,7 +29,7 @@ export function DashboardShell({
         <DashboardSidebar userLabel={userLabel} userEmail={userEmail} />
       </aside>
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="bg-background/80 supports-backdrop-filter:bg-background/60 sticky top-0 z-40 flex h-14 items-center gap-2 border-b px-4 backdrop-blur md:hidden">
+        <header className="bg-background/85 supports-backdrop-filter:bg-background/65 sticky top-0 z-40 flex h-14 items-center gap-2 border-b px-3 backdrop-blur-md md:hidden">
           <Sheet>
             <SheetTrigger
               className={cn(
@@ -49,7 +50,12 @@ export function DashboardShell({
               />
             </SheetContent>
           </Sheet>
-          <span className="text-sm font-semibold">LicensePath</span>
+          <BrandMark
+            href="/dashboard"
+            variant="compact"
+            showTagline={false}
+            className="min-w-0 shrink"
+          />
         </header>
         <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
       </div>

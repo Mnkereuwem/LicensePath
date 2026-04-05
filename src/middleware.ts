@@ -1,11 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { getSupabasePublicConfig, isSupabasePublicConfigured } from "@/lib/supabase/env";
+
 function supabaseConfigured() {
-  return (
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.length) &&
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length)
-  );
+  return isSupabasePublicConfigured();
 }
 
 export async function middleware(request: NextRequest) {
@@ -20,9 +19,11 @@ export async function middleware(request: NextRequest) {
 
   let supabaseResponse = NextResponse.next({ request });
 
+  const { url, anonKey } = getSupabasePublicConfig();
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {

@@ -26,7 +26,9 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
+          Settings
+        </h1>
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
           Name and BBS ASW registration date feed your dashboard countdown and
           exports later on.

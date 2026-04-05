@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ClipboardList,
   Clock,
   FileText,
   LayoutDashboard,
@@ -11,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 
+import { BrandMark } from "@/components/brand/brand-mark";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -42,18 +42,8 @@ export function DashboardSidebar({
         className,
       )}
     >
-      <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-        <div className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-          <ClipboardList className="size-4" aria-hidden />
-        </div>
-        <div className="flex flex-col leading-tight">
-          <span className="text-sm font-semibold tracking-tight">
-            LicensePath
-          </span>
-          <span className="text-muted-foreground text-xs">
-            ASW hour compliance
-          </span>
-        </div>
+      <div className="flex min-h-14 items-center border-b border-sidebar-border px-3 py-2.5">
+        <BrandMark href="/dashboard" variant="sidebar" className="gap-2.5" />
       </div>
       <ScrollArea className="flex-1 px-2 py-3">
         <nav className="flex flex-col gap-1" aria-label="Main">

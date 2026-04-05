@@ -6,7 +6,9 @@
     "dev": "next dev -H 127.0.0.1 -p 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:apply": "node scripts/apply-licensepath-schema.cjs",
+    "db:fix-rls": "node scripts/apply-licensepath-schema.cjs supabase/migrations/20260408100000_fix_profiles_rls_recursion.sql"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -31,6 +33,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
+    "pg": "^8.20.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

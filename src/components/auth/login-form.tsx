@@ -42,10 +42,11 @@ export function LoginForm() {
         </CardDescription>
         {err === "config" ? (
           <p className="text-destructive text-sm">
-            Supabase environment variables are missing. Add{" "}
-            <code className="text-xs">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-            <code className="text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to{" "}
-            <code className="text-xs">.env.local</code>.
+            Supabase is not fully configured. In <code className="text-xs">.env.local</code>{" "}
+            set <code className="text-xs">NEXT_PUBLIC_SUPABASE_URL</code> (Project URL from
+            Dashboard → Settings → API) and a publishable or{" "}
+            <code className="text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>, then restart{" "}
+            <code className="text-xs">npm run dev</code>.
           </p>
         ) : err === "auth" ? (
           <p className="text-destructive text-sm">

@@ -14,6 +14,17 @@ import { startOfWeekMonday } from "@/lib/dates/week";
 import type { HourCategoryKey } from "@/lib/hours/categories";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+function describeSupabaseError(err: {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+}): string {
+  return [err.message, err.details, err.hint, err.code]
+    .filter((s) => typeof s === "string" && s.length > 0)
+    .join(" — ");
+}
+
 type EntryRow = {
   category: HourCategoryKey;
   hours: number;
@@ -33,22 +44,32 @@ function sumCategory(
   }, 0);
 }
 
-export async function fetchDashboardModel(): Promise<DashboardModel | null> {
+export async function fetchDashboardModel(): Promise<{
+  model: DashboardModel | null;
+  warnings: string[];
+}> {
+  const warnings: string[] = [];
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) {
+    return { model: null, warnings };
+  }
 
   const { data: rows, error: entriesError } = await supabase
     .from("weekly_hour_entries")
-    .select("category, hours, credited_hours, week_start");
+    .select("category, hours, credited_hours, week_start")
+    .eq("supervisee_id", user.id);
 
+  let list = (rows ?? []) as EntryRow[];
   if (entriesError) {
-    console.error(entriesError);
+    const detail = describeSupabaseError(entriesError);
+    warnings.push(
+      `Experience hours could not be loaded (${detail || "unknown error"}). If this is a new Supabase project, open the SQL editor and run the files in order under supabase/migrations/.`,
+    );
+    list = [];
   }
-
-  const list = (rows ?? []) as EntryRow[];
   const now = new Date();
   const weekStart = startOfWeekMonday(now);
   const thisWeek = list.filter((r) => r.week_start === weekStart);
@@ -116,46 +137,56 @@ export async function fetchDashboardModel(): Promise<DashboardModel | null> {
     groupSupervisionHours,
   });
 
-  const { data: clockRow } = await supabase
+  const { data: clockRow, error: clockError } = await supabase
     .from("supervisee_license_clocks")
     .select("bbs_registration_at")
     .eq("profile_id", user.id)
     .maybeSingle();
 
+  if (clockError) {
+    const detail = describeSupabaseError(clockError);
+    warnings.push(
+      `ASW registration date could not be loaded (${detail || "unknown error"}). Dashboard countdown may be wrong until migrations and profile data exist.`,
+    );
+  }
+
   const registrationIso = clockRow?.bbs_registration_at ?? now.toISOString().slice(0, 10);
   const registrationDate = new Date(`${registrationIso}T12:00:00`);
 
   return {
-    hours: {
-      totalCredited,
-      directClinicalCredited,
-      faceToFaceCredited,
-      nonClinicalCredited,
+    model: {
+      hours: {
+        totalCredited,
+        directClinicalCredited,
+        faceToFaceCredited,
+        nonClinicalCredited,
+      },
+      week: {
+        clinicalHours,
+        individualSupervisionHours,
+        groupSupervisionHours,
+        rawTotalHours,
+      },
+      ratioStatus,
+      supervisionLabel: formatSupervisionRatioLabel(ratioStatus),
+      cappedWeekTotal: capWeeklyCreditableHours(cappedWeekTotalRaw),
+      totalProgressPercent: Math.min(
+        100,
+        Math.round((totalCredited / TOTAL_HOURS_TARGET) * 1000) / 10,
+      ),
+      sunset: {
+        registrationDate,
+        endDate: getSunsetEndDate(registrationDate),
+        daysRemaining: getSunsetDaysRemaining(registrationDate, now),
+      },
+      targets: {
+        total: TOTAL_HOURS_TARGET,
+        directMin: DIRECT_CLINICAL_MIN,
+        faceToFaceMin: FACE_TO_FACE_MIN,
+        nonClinicalMax: NON_CLINICAL_MAX,
+      },
     },
-    week: {
-      clinicalHours,
-      individualSupervisionHours,
-      groupSupervisionHours,
-      rawTotalHours,
-    },
-    ratioStatus,
-    supervisionLabel: formatSupervisionRatioLabel(ratioStatus),
-    cappedWeekTotal: capWeeklyCreditableHours(cappedWeekTotalRaw),
-    totalProgressPercent: Math.min(
-      100,
-      Math.round((totalCredited / TOTAL_HOURS_TARGET) * 1000) / 10,
-    ),
-    sunset: {
-      registrationDate,
-      endDate: getSunsetEndDate(registrationDate),
-      daysRemaining: getSunsetDaysRemaining(registrationDate, now),
-    },
-    targets: {
-      total: TOTAL_HOURS_TARGET,
-      directMin: DIRECT_CLINICAL_MIN,
-      faceToFaceMin: FACE_TO_FACE_MIN,
-      nonClinicalMax: NON_CLINICAL_MAX,
-    },
+    warnings,
   };
 }
 
@@ -177,11 +208,15 @@ export async function fetchWeekHourValues(
     };
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("weekly_hour_entries")
     .select("category, hours")
     .eq("supervisee_id", user.id)
     .eq("week_start", weekStart);
+
+  if (error && process.env.NODE_ENV === "development") {
+    console.warn("[fetchWeekHourValues]", describeSupabaseError(error));
+  }
 
   const base: Record<HourCategoryKey, number> = {
     direct_clinical: 0,

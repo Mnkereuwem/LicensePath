@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function updateSuperviseeSettings(formData: FormData): Promise<
@@ -20,6 +21,19 @@ export async function updateSuperviseeSettings(formData: FormData): Promise<
   } = await supabase.auth.getUser();
   if (!user) {
     return { ok: false, message: "Not signed in." };
+  }
+
+  const { data: existingProfile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!existingProfile) {
+    const fixed = await ensureProfileForUser(user);
+    if (!fixed.ok) {
+      return { ok: false, message: fixed.message };
+    }
   }
 
   const { error: profileError } = await supabase

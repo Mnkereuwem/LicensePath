@@ -1,10 +1,10 @@
 import Link from "next/link";
 
+import { BrandMark } from "@/components/brand/brand-mark";
 import { cn } from "@/lib/utils";
 import {
   BarChart3,
   ClipboardCheck,
-  ClipboardList,
   Lock,
   Shield,
 } from "lucide-react";
@@ -33,22 +33,9 @@ export default async function HomePage() {
 
   return (
     <div className="bg-background text-foreground min-h-screen">
-      <header className="border-border/60 bg-background/80 sticky top-0 z-20 border-b backdrop-blur-md">
+      <header className="border-border/50 bg-background/85 supports-backdrop-filter:bg-background/70 sticky top-0 z-20 border-b backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 text-sm font-semibold tracking-tight"
-          >
-            <span className="bg-primary text-primary-foreground inline-flex size-9 items-center justify-center rounded-xl shadow-sm">
-              <ClipboardList className="size-4" aria-hidden />
-            </span>
-            <span className="flex flex-col leading-none">
-              <span>LicensePath</span>
-              <span className="text-muted-foreground text-[0.65rem] font-normal tracking-normal">
-                ASW hours &amp; board readiness
-              </span>
-            </span>
-          </Link>
+          <BrandMark variant="compact" />
           <nav className="flex items-center gap-2 sm:gap-3">
             {loggedIn ? (
               <Link
@@ -79,13 +66,16 @@ export default async function HomePage() {
 
       <main>
         <section className="border-border/40 relative overflow-hidden border-b">
-          <div className="from-primary/[0.07] via-background to-background absolute inset-0 bg-gradient-to-b" />
-          <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:py-28">
-            <div className="max-w-2xl space-y-6">
-              <p className="text-primary text-sm font-semibold tracking-wide uppercase">
+          <div className="from-primary/[0.12] via-primary/[0.04] to-background pointer-events-none absolute inset-0 bg-gradient-to-b" />
+          <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:py-32">
+            <div className="mb-10 sm:mb-12">
+              <BrandMark variant="hero" className="max-w-xl" href="" />
+            </div>
+            <div className="max-w-3xl space-y-6">
+              <p className="text-primary text-sm font-semibold tracking-[0.2em] uppercase">
                 Built for California ASWs
               </p>
-              <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl sm:leading-[1.1]">
+              <h1 className="font-heading text-foreground text-4xl font-semibold tracking-tight sm:text-6xl sm:leading-[1.08] lg:text-7xl lg:leading-[1.06]">
                 Hour tracking that respects BBS math, not spreadsheet hope.
               </h1>
               <p className="text-muted-foreground text-lg leading-relaxed">
@@ -117,7 +107,7 @@ export default async function HomePage() {
 
         <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
           <div className="mb-10 max-w-2xl">
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            <h2 className="font-heading text-2xl font-semibold tracking-tight sm:text-4xl">
               What you can do today
             </h2>
             <p className="text-muted-foreground mt-2 text-sm leading-relaxed sm:text-base">
@@ -126,9 +116,9 @@ export default async function HomePage() {
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <Card className="border-border/80 shadow-sm">
+            <Card className="border-border/60 bg-card/80 shadow-lg shadow-black/20">
               <CardHeader>
-                <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-lg bg-teal-500/10">
+                <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
                   <ClipboardCheck className="size-5" aria-hidden />
                 </div>
                 <CardTitle className="text-base">Structured hour entry</CardTitle>
@@ -139,9 +129,9 @@ export default async function HomePage() {
                 </CardDescription>
               </CardHeader>
             </Card>
-            <Card className="border-border/80 shadow-sm">
+            <Card className="border-border/60 bg-card/80 shadow-lg shadow-black/20">
               <CardHeader>
-                <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-lg bg-cyan-500/10">
+                <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-xl bg-chart-2/15 ring-1 ring-chart-2/25">
                   <BarChart3 className="size-5" aria-hidden />
                 </div>
                 <CardTitle className="text-base">Live compliance cues</CardTitle>
@@ -151,9 +141,9 @@ export default async function HomePage() {
                 </CardDescription>
               </CardHeader>
             </Card>
-            <Card className="border-border/80 shadow-sm">
+            <Card className="border-border/60 bg-card/80 shadow-lg shadow-black/20">
               <CardHeader>
-                <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-lg bg-slate-500/10">
+                <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-xl bg-muted ring-1 ring-border">
                   <Shield className="size-5" aria-hidden />
                 </div>
                 <CardTitle className="text-base">Supabase-native security</CardTitle>
@@ -167,28 +157,27 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="bg-muted/30 border-border/60 border-y">
+        <section className="border-border/50 bg-muted/25 border-y">
           <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 py-14 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex gap-3">
               <Lock className="text-primary mt-0.5 size-5 shrink-0" aria-hidden />
               <div>
-                <h3 className="text-lg font-semibold tracking-tight">
-                  Ready when your project is configured
+                <h3 className="font-heading text-lg font-semibold tracking-tight">
+                  Built with security in mind
                 </h3>
                 <p className="text-muted-foreground mt-1 max-w-xl text-sm leading-relaxed">
-                  Point <code className="text-xs">.env.local</code> at your
-                  Supabase project and run the SQL migrations in{" "}
-                  <code className="text-xs">supabase/migrations</code>. Enable
-                  email/password auth (and optional email confirmations) in the
-                  Supabase dashboard.
+                  Your account is protected with industry-standard auth. Hours
+                  and profile data stay scoped to you (and, when you add them,
+                  to supervisors you explicitly link)—not a shared spreadsheet
+                  or open drive folder.
                 </p>
               </div>
             </div>
             <Link
-              href="/register"
+              href={loggedIn ? "/dashboard" : "/register"}
               className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
             >
-              Configure &amp; try it
+              {loggedIn ? "Open dashboard" : "Create your workspace"}
             </Link>
           </div>
         </section>

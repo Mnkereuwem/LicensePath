@@ -1,5 +1,10 @@
--- LicensePath initial schema: multi-tenant ASW hour tracking with RLS-ready tables.
--- Map aggregates to official BBS Form 1800 at export time (PDF field names differ by revision).
+-- ============================================================================
+-- LicensePath — run this ENTIRE file once in Supabase
+-- Dashboard → SQL Editor → New query → paste → Run
+--
+-- After Run succeeds, wait a few seconds (or refresh the browser). If you still
+-- see PGRST205, run only the last line: NOTIFY pgrst, 'reload schema';
+-- ============================================================================
 
 -- Extensions
 create extension if not exists "pgcrypto";
@@ -55,7 +60,7 @@ create table public.supervision_relationships (
 create index supervision_supervisee_idx on public.supervision_relationships (supervisee_id);
 create index supervision_supervisor_idx on public.supervision_relationships (supervisor_id);
 
--- Client identifiers — no PHI in v1; access is grant-gated for future clinical notes
+-- Client identifiers — no full PHI in v1; access is grant-gated
 create table public.client_records (
   id uuid primary key default gen_random_uuid (),
   organization_id uuid not null references public.organizations (id) on delete restrict,
@@ -73,8 +78,7 @@ create table public.client_access_grants (
   unique (client_record_id, grantee_profile_id)
 );
 
--- Weekly buckets for creditable hours (app enforces 40h cap & supervision ratio pre-credit)
--- bbs_form_1800_line / service_code: align with current BBS PDF at export time
+-- Weekly hour entries
 create table public.weekly_hour_entries (
   id uuid primary key default gen_random_uuid (),
   organization_id uuid not null references public.organizations (id) on delete restrict,
@@ -114,7 +118,7 @@ alter table public.client_access_grants enable row level security;
 alter table public.weekly_hour_entries enable row level security;
 alter table public.audit_exports enable row level security;
 
--- Helper: current user's org
+-- Helper: current user's profile row
 create or replace function public.current_profile ()
 returns public.profiles
 language sql
@@ -127,34 +131,45 @@ as $$
   where p.id = auth.uid ();
 $$;
 
--- Organizations: members can read their tenant row
+-- Default org row (matches app bootstrap UUID)
+insert into public.organizations (id, name)
+values (
+    'a0000000-0000-4000-8000-000000000001',
+    'LicensePath default'
+  )
+on conflict (id) do nothing;
+
+-- Unique index for hour upserts
+create unique index if not exists weekly_hour_entries_supervisee_week_category_key
+  on public.weekly_hour_entries (supervisee_id, week_start, category);
+
+-- RLS policies
 create policy organizations_select_member on public.organizations
   for select using (
     id = (select (public.current_profile ()).organization_id)
   );
 
--- Supervision relationships: visible within same organization
 create policy supervision_relationships_select on public.supervision_relationships
   for select using (
     organization_id = (select (public.current_profile ()).organization_id)
   );
 
--- Audit exports: requester or subject supervisee
 create policy audit_exports_select on public.audit_exports
   for select using (
     requested_by = auth.uid () or supervisee_id = auth.uid ()
   );
 
--- Profiles: users can read profiles in their organization (tighten per role later)
 create policy profiles_select_org on public.profiles
   for select using (
     organization_id = (select (public.current_profile ()).organization_id)
   );
 
+create policy profiles_select_self on public.profiles
+  for select using (id = auth.uid ());
+
 create policy profiles_update_self on public.profiles
   for update using (id = auth.uid ());
 
--- Supervisee clocks: owner or supervisors in relationship / org admin (simplified: same org + self)
 create policy supervisee_clocks_select on public.supervisee_license_clocks
   for select using (
     profile_id = auth.uid ()
@@ -166,10 +181,12 @@ create policy supervisee_clocks_select on public.supervisee_license_clocks
     )
   );
 
-create policy supervisee_clocks_mutate_self on public.supervisee_license_clocks
-  for all using (profile_id = auth.uid ());
+create policy supervisee_clocks_insert_self on public.supervisee_license_clocks
+  for insert with check (profile_id = auth.uid ());
 
--- Weekly entries: supervisee owns rows; supervisors see linked supervisees
+create policy supervisee_clocks_update_self on public.supervisee_license_clocks
+  for update using (profile_id = auth.uid ()) with check (profile_id = auth.uid ());
+
 create policy weekly_entries_select on public.weekly_hour_entries
   for select using (
     supervisee_id = auth.uid ()
@@ -182,15 +199,20 @@ create policy weekly_entries_select on public.weekly_hour_entries
   );
 
 create policy weekly_entries_insert_self on public.weekly_hour_entries
-  for insert with check (supervisee_id = auth.uid ());
+  for insert with check (
+    supervisee_id = auth.uid ()
+    and organization_id = (select (public.current_profile ()).organization_id)
+  );
 
 create policy weekly_entries_update_self on public.weekly_hour_entries
-  for update using (supervisee_id = auth.uid ());
+  for update using (supervisee_id = auth.uid ()) with check (
+    supervisee_id = auth.uid ()
+    and organization_id = (select (public.current_profile ()).organization_id)
+  );
 
 create policy weekly_entries_delete_self on public.weekly_hour_entries
   for delete using (supervisee_id = auth.uid ());
 
--- Client records: deny-by-default; only grantees + same-org admins (expand with org_admin check)
 create policy client_records_select on public.client_records
   for select using (
     exists (
@@ -203,10 +225,51 @@ create policy client_records_select on public.client_records
 create policy client_grants_select on public.client_access_grants
   for select using (grantee_profile_id = auth.uid ());
 
--- Note: add INSERT policies for client records/grants when workflows are implemented.
+-- New user → profile + clock
+create or replace function public.handle_new_user ()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  default_org uuid := 'a0000000-0000-4000-8000-000000000001';
+  reg date;
+begin
+  insert into public.profiles (id, organization_id, full_name, role)
+  values (
+    new.id,
+    default_org,
+    coalesce(
+      nullif(trim(coalesce(new.raw_user_meta_data ->> 'full_name', '')), ''),
+      split_part(new.email, '@', 1)
+    ),
+    'supervisee'
+  );
+
+  reg := coalesce(
+    (nullif(new.raw_user_meta_data ->> 'bbs_registration_at', ''))::date,
+    (current_timestamp at time zone 'utc')::date
+  );
+
+  insert into public.supervisee_license_clocks (profile_id, bbs_registration_at)
+  values (new.id, reg);
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+
+create trigger on_auth_user_created
+after insert on auth.users for each row
+execute procedure public.handle_new_user ();
 
 comment on table public.weekly_hour_entries is
   'Creditable hours by week; application enforces 40h/week cap and supervision ratio before credited_hours.';
 
 comment on column public.weekly_hour_entries.bbs_form_1800_field_key is
   'Stable internal key mapped to official BBS Form 1800 PDF fields at export time.';
+
+-- Ask PostgREST to refresh (helps clear PGRST205 quickly on hosted Supabase)
+notify pgrst, 'reload schema';

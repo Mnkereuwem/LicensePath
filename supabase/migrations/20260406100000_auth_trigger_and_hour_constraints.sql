@@ -56,11 +56,7 @@ drop policy if exists weekly_entries_insert_self on public.weekly_hour_entries;
 create policy weekly_entries_insert_self on public.weekly_hour_entries
   for insert with check (
     supervisee_id = auth.uid ()
-    and organization_id = (
-      select organization_id
-      from public.profiles
-      where id = auth.uid ()
-    )
+    and organization_id = (select (public.current_profile ()).organization_id)
   );
 
 drop policy if exists weekly_entries_update_self on public.weekly_hour_entries;
@@ -68,11 +64,7 @@ drop policy if exists weekly_entries_update_self on public.weekly_hour_entries;
 create policy weekly_entries_update_self on public.weekly_hour_entries
   for update using (supervisee_id = auth.uid ()) with check (
     supervisee_id = auth.uid ()
-    and organization_id = (
-      select organization_id
-      from public.profiles
-      where id = auth.uid ()
-    )
+    and organization_id = (select (public.current_profile ()).organization_id)
   );
 
 -- Supervisee clocks: explicit insert/update checks (FOR ALL was ambiguous for INSERT)

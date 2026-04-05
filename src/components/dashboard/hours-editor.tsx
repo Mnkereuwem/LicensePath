@@ -93,7 +93,9 @@ export function HoursEditor({
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Log hours</h1>
+        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
+          Log hours
+        </h1>
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
           Enter hours for one week (Monday–Sunday). We apply the weekly{" "}
           {WEEKLY_CREDIT_CAP}h credit cap across categories before writing{" "}
@@ -102,7 +104,7 @@ export function HoursEditor({
         </p>
       </div>
 
-      <Card className="border-border/80 shadow-sm">
+      <Card className="border-border/60 shadow-lg shadow-black/20">
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
