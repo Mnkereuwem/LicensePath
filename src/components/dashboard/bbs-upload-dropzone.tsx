@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const ACCEPT =
-  "image/jpeg,image/png,image/webp,image/gif,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.gif";
+  "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif";
 
 export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -84,10 +84,10 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
               Upload BBS log (photo or PDF)
             </CardTitle>
             <CardDescription className="mt-1">
-              We store the file privately, use GPT-4o to read your log, save lines to{" "}
-              <span className="text-foreground font-medium">hours_logs</span>, and
-              add those hours into this page and the dashboard for the matching week
-              (Monday–Sunday).
+              Phone photos work (JPEG, PNG, HEIC): we normalize orientation and format
+              before OCR. Files are stored privately; hours go to{" "}
+              <span className="text-foreground font-medium">hours_logs</span> and your
+              weekly grid for the matching week (Monday–Sunday).
             </CardDescription>
           </div>
         </div>

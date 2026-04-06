@@ -12,6 +12,10 @@ import {
 import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
 import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  prepareRasterForOcr,
+  resolveEffectiveMime,
+} from "@/lib/uploads/raster-normalize";
 
 const BUCKET = "bbs-documents";
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -21,6 +25,8 @@ const ALLOWED = new Set([
   "image/png",
   "image/webp",
   "image/gif",
+  "image/heic",
+  "image/heif",
   "application/pdf",
 ]);
 
@@ -44,11 +50,13 @@ export async function uploadBbsDocumentAndExtract(
     return { ok: false, message: "File must be 10MB or smaller." };
   }
 
-  const mime = (file.type || "application/octet-stream").toLowerCase();
+  let buf = Buffer.from(await file.arrayBuffer());
+  const mime = resolveEffectiveMime(file, buf).toLowerCase();
   if (!ALLOWED.has(mime)) {
     return {
       ok: false,
-      message: "Use a JPEG, PNG, WebP, GIF, or PDF file.",
+      message:
+        "Use a JPEG, PNG, WebP, GIF, HEIC/HEIF, or PDF. On phones, try again if the gallery picked an unsupported type.",
     };
   }
 
@@ -75,13 +83,26 @@ export async function uploadBbsDocumentAndExtract(
     organizationId = fixed.organizationId;
   }
 
-  const buf = Buffer.from(await file.arrayBuffer());
   const storagePath = `${user.id}/${Date.now()}_${safeFileName(file.name)}`;
+
+  let uploadBody: Buffer = buf;
+  let contentType = mime;
+  if (mime !== "application/pdf") {
+    try {
+      const prepared = await prepareRasterForOcr(buf, mime);
+      uploadBody = prepared.buf;
+      contentType = prepared.contentType;
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "Could not process this image.";
+      return { ok: false, message: msg };
+    }
+  }
 
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, buf, {
-      contentType: mime,
+    .upload(storagePath, uploadBody, {
+      contentType,
       upsert: false,
     });
 
@@ -106,8 +127,8 @@ export async function uploadBbsDocumentAndExtract(
         entries = await extractBbsEntriesFromPdfBuffer(buf, file.name);
       }
     } else {
-      const b64 = buf.toString("base64");
-      const dataUrl = `data:${mime};base64,${b64}`;
+      const b64 = uploadBody.toString("base64");
+      const dataUrl = `data:${contentType};base64,${b64}`;
       entries = await extractBbsEntriesFromImageDataUrl(dataUrl);
     }
   } catch (e) {
