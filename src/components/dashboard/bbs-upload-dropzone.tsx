@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-const ACCEPT =
-  "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif";
+/* Broad `image/*` avoids iOS/WebKit silently dropping picks when MIME doesn’t match a narrow list */
+const ACCEPT = "image/*,application/pdf,.pdf";
 
 export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -26,14 +26,20 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
   const runUpload = useCallback(
     async (file: File) => {
       if (!file.size) {
-        toast.error("Empty file.");
+        toast.error("Empty file.", {
+          description: "Try another photo or export as JPEG from your gallery.",
+        });
         return;
       }
       setBusy(true);
+      const loadingId = toast.loading("Uploading and reading your log…", {
+        description: "This can take up to a minute on slow connections.",
+      });
       try {
         const fd = new FormData();
         fd.set("file", file);
         const res = await uploadBbsDocumentAndExtract(fd);
+        toast.dismiss(loadingId);
         if (res.ok) {
           const weeks =
             res.weeksUpdated.length === 0
@@ -46,6 +52,13 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
         } else {
           toast.error("Upload or OCR failed", { description: res.message });
         }
+      } catch (e) {
+        toast.dismiss(loadingId);
+        const msg =
+          e instanceof Error ? e.message : "Unexpected error (check connection).";
+        toast.error("Upload failed", {
+          description: msg,
+        });
       } finally {
         setBusy(false);
       }
