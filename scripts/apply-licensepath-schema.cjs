@@ -10,6 +10,7 @@ const dns = require("dns");
 const net = require("net");
 const parse = require("pg-connection-string").parse;
 const { Client } = require("pg");
+const { createClient } = require("@supabase/supabase-js");
 
 /* Prefer IPv4: direct DB host often resolves AAAA first; Windows/home networks may time out on IPv6 */
 if (typeof dns.setDefaultResultOrder === "function") {
@@ -103,7 +104,7 @@ function rewriteDirectUrlForPooler(connectionString, poolerHost) {
   }
 }
 
-function connectionStringFromParts() {
+function supabaseRefPasswordFromEnv() {
   const pw =
     process.env.SUPABASE_DB_PASSWORD ||
     process.env.DATABASE_PASSWORD ||
@@ -114,18 +115,108 @@ function connectionStringFromParts() {
     const host = new URL(pub).hostname;
     const ref = host.split(".")[0];
     if (!ref) return null;
+    return { ref, pw };
+  } catch {
+    return null;
+  }
+}
+
+function connectionStringFromParts() {
+  const parts = supabaseRefPasswordFromEnv();
+  if (!parts) return null;
+  const { ref, pw } = parts;
+  const enc = encodeURIComponent(pw);
+  /* Direct host db.<ref>.supabase.co is often IPv6-only; many home networks time out on IPv6.
+     Session pooler (Dashboard → Database → "Session pooler") has IPv4 — set SUPABASE_POOLER_HOST. */
+  const pooler = (process.env.SUPABASE_POOLER_HOST || "").trim();
+  if (pooler) {
+    const poolUser = encodeURIComponent(`postgres.${ref}`);
+    return `postgresql://${poolUser}:${enc}@${pooler}:5432/postgres`;
+  }
+  return `postgresql://postgres:${enc}@db.${ref}.supabase.co:5432/postgres`;
+}
+
+/**
+ * Session pooler user postgres.<ref> cannot ALTER storage.buckets / policies.
+ * The database role `postgres` on db.<ref>.supabase.co can (when reachable via IPv4).
+ */
+function postgresOwnerDirectUrlFromEnv() {
+  const parts = supabaseRefPasswordFromEnv();
+  if (!parts) return null;
+  const { ref, pw } = parts;
+  const enc = encodeURIComponent(pw);
+  return `postgresql://postgres:${enc}@db.${ref}.supabase.co:5432/postgres`;
+}
+
+/**
+ * If DATABASE_URL uses postgres.<projectRef>@pooler, derive the direct `postgres` URI
+ * (same password) so storage DDL can run without NEXT_PUBLIC_SUPABASE_URL in .env.local.
+ */
+function postgresOwnerDirectUrlFromPoolerUri(connectionString) {
+  if (!connectionString) return null;
+  try {
+    const normalized = connectionString.replace(/^postgres(ql)?:/i, "http:");
+    const u = new URL(normalized);
+    const user = decodeURIComponent(u.username || "");
+    const m = /^postgres\.([^@\s/]+)$/i.exec(user);
+    if (!m) return null;
+    const ref = m[1];
+    const pw =
+      u.password === ""
+        ? ""
+        : decodeURIComponent(u.password.replace(/\+/g, " "));
     const enc = encodeURIComponent(pw);
-    /* Direct host db.<ref>.supabase.co is often IPv6-only; many home networks time out on IPv6.
-       Session pooler (Dashboard → Database → "Session pooler") has IPv4 — set SUPABASE_POOLER_HOST. */
-    const pooler = (process.env.SUPABASE_POOLER_HOST || "").trim();
-    if (pooler) {
-      const poolUser = encodeURIComponent(`postgres.${ref}`);
-      return `postgresql://${poolUser}:${enc}@${pooler}:5432/postgres`;
-    }
     return `postgresql://postgres:${enc}@db.${ref}.supabase.co:5432/postgres`;
   } catch {
     return null;
   }
+}
+
+function storageOwnerRetryMessage(msg) {
+  return /must be owner of relation|permission denied for schema storage/i.test(
+    String(msg),
+  );
+}
+
+/**
+ * Hosted Supabase often denies INSERT into storage.buckets to pooler / postgres DB roles.
+ * The dashboard Storage API (service_role) can create the bucket; policies still run over SQL.
+ */
+async function ensureBbsUploadsBucketViaApi() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!url || !key) {
+    throw new Error(
+      "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local (Dashboard → Settings → API).",
+    );
+  }
+  const supabase = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: buckets, error: listErr } = await supabase.storage.listBuckets();
+  if (listErr) throw new Error(listErr.message);
+  if (buckets?.some((b) => b.id === "bbs-uploads")) {
+    console.log("Storage bucket bbs-uploads already exists (API).");
+    return;
+  }
+  const { error: createErr } = await supabase.storage.createBucket("bbs-uploads", {
+    public: false,
+  });
+  if (createErr && !/already exists/i.test(String(createErr.message))) {
+    throw new Error(createErr.message);
+  }
+  console.log("Created storage bucket bbs-uploads via Storage API.");
+}
+
+/** Strip bucket row + bucket comment (both need storage owner); keep policies + notify. */
+function bbsUploadsPoliciesSql(fullSql) {
+  return fullSql
+    .replace(
+      /insert\s+into\s+storage\.buckets[\s\S]*?on\s+conflict\s*\([^)]*\)\s*do\s+nothing\s*;/gi,
+      "",
+    )
+    .replace(/comment\s+on\s+column\s+storage\.buckets\.name[\s\S]*?;/gi, "")
+    .trim();
 }
 
 async function main() {
@@ -177,35 +268,118 @@ ${commentedDatabaseUrlHint()}`);
     process.exit(1);
   }
   const sql = fs.readFileSync(sqlPath, "utf8");
+  const bbsUploadsHybrid = /bbs_uploads_bucket\.sql$/i.test(sqlPath);
 
-  const clientConfig = await pgClientConfig(connectionString);
-  const client = new Client(clientConfig);
+  async function applyWithUri(uri, label, sqlText) {
+    const run = typeof sqlText === "string" ? sqlText : sql;
+    const clientConfig = await pgClientConfig(uri);
+    const client = new Client(clientConfig);
+    console.log(label ? `Connecting (${label})…` : "Connecting…");
+    await client.connect();
+    console.log(`Applying SQL (${path.relative(root, sqlPath)})…`);
+    try {
+      await client.query(run);
+    } finally {
+      await client.end();
+    }
+  }
 
-  console.log("Connecting…");
-  await client.connect();
-  console.log(`Applying SQL (${path.relative(root, sqlPath)})…`);
+  function printDone(sqlRun) {
+    if (/notify\s+pgrst/i.test(sqlRun)) {
+      console.log("\nDone. PostgREST schema reload was included in this file.");
+    } else {
+      console.log("\nDone.");
+    }
+    console.log("Refresh https://license.fyi or http://127.0.0.1:3000/dashboard\n");
+  }
+
+  const ownerUrl =
+    postgresOwnerDirectUrlFromEnv() ||
+    postgresOwnerDirectUrlFromPoolerUri(connectionString);
+
   try {
-    await client.query(sql);
+    await applyWithUri(connectionString, null, sql);
+    printDone(sql);
   } catch (e) {
-    console.error("\nApply failed:", e.message);
-    if (/already exists/i.test(String(e.message))) {
-      console.error(`
+    let done = false;
+
+    if (
+      storageOwnerRetryMessage(e.message) &&
+      ownerUrl &&
+      ownerUrl !== connectionString
+    ) {
+      console.warn(
+        "\nPooler role cannot modify storage; retrying with postgres@db.<ref> (IPv4)…",
+      );
+      try {
+        await applyWithUri(ownerUrl, "postgres owner", sql);
+        printDone(sql);
+        done = true;
+      } catch (e2) {
+        console.warn("\npostgres@db:", e2.message);
+      }
+    }
+
+    if (!done && bbsUploadsHybrid && storageOwnerRetryMessage(e.message)) {
+      const polSql = bbsUploadsPoliciesSql(sql);
+      if (polSql.includes("create policy")) {
+        console.warn(
+          "\nTrying Storage API for bucket + Postgres for policies (hosted Supabase)…",
+        );
+        try {
+          await ensureBbsUploadsBucketViaApi();
+          const uris = [connectionString, ownerUrl].filter(
+            (u, i, a) => u && a.indexOf(u) === i,
+          );
+          let lastPe = null;
+          for (const uri of uris) {
+            const lbl =
+              uri === ownerUrl ? "policies (postgres@db)" : "policies (pooler)";
+            try {
+              await applyWithUri(uri, lbl, polSql);
+              printDone(polSql);
+              done = true;
+              break;
+            } catch (pe) {
+              lastPe = pe;
+              console.warn("Policies apply:", pe.message);
+            }
+          }
+          if (!done && lastPe) throw lastPe;
+        } catch (hybridErr) {
+          console.error("\nHybrid storage setup failed:", hybridErr.message);
+          console.error(`
+Add SUPABASE_SERVICE_ROLE_KEY to .env.local, or paste this migration into Supabase → SQL Editor.
+`);
+          process.exit(1);
+        }
+      }
+    }
+
+    if (!done) {
+      console.error("\nApply failed:", e.message);
+      if (/already exists/i.test(String(e.message))) {
+        console.error(`
 Looks like part of the schema is already there. Options:
 - In Supabase → SQL Editor, run only: NOTIFY pgrst, 'reload schema';
 - Or fix the error above (duplicate object), then run this script again.
 `);
+      }
+      if (storageOwnerRetryMessage(e.message) && !ownerUrl && !bbsUploadsHybrid) {
+        console.error(`
+Storage DDL needs the database postgres user. Set NEXT_PUBLIC_SUPABASE_URL and
+SUPABASE_DB_PASSWORD in .env.local, or paste this file into Supabase → SQL Editor.
+`);
+      }
+      if (storageOwnerRetryMessage(e.message) && bbsUploadsHybrid) {
+        console.error(`
+For bbs-uploads: add SUPABASE_SERVICE_ROLE_KEY to .env.local and re-run npm run db:bbs-uploads,
+or run the SQL file in Supabase → SQL Editor.
+`);
+      }
+      process.exit(1);
     }
-    process.exit(1);
-  } finally {
-    await client.end();
   }
-
-  if (/notify\s+pgrst/i.test(sql)) {
-    console.log("\nDone. PostgREST schema reload was included in this file.");
-  } else {
-    console.log("\nDone.");
-  }
-  console.log("Refresh https://license.fyi or http://127.0.0.1:3000/dashboard\n");
 }
 
 main().catch((e) => {

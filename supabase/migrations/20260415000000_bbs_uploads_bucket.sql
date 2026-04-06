@@ -4,6 +4,11 @@ insert into storage.buckets (id, name, public)
 values ('bbs-uploads', 'bbs-uploads', false)
 on conflict (id) do nothing;
 
+drop policy if exists bbs_uploads_insert_own on storage.objects;
+drop policy if exists bbs_uploads_select_own on storage.objects;
+drop policy if exists bbs_uploads_update_own on storage.objects;
+drop policy if exists bbs_uploads_delete_own on storage.objects;
+
 create policy bbs_uploads_insert_own on storage.objects
   for insert to authenticated
   with check (
