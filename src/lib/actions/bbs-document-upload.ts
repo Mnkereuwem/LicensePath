@@ -112,7 +112,14 @@ export async function uploadBbsDocumentAndExtract(
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "OCR failed.";
-    return { ok: false, message: msg };
+    const slow =
+      /timeout|TIMEOUT|504|deadline|aborted|ECONNRESET|fetch failed/i.test(
+        msg,
+      );
+    const hint = slow
+      ? " On Vercel, OCR needs a long serverless run: use a Pro plan (or higher) so maxDuration 60s applies; Hobby is limited to 10s."
+      : "";
+    return { ok: false, message: `${msg}${hint}` };
   }
 
   if (!entries.length) {

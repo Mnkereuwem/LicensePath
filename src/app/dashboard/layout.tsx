@@ -2,6 +2,9 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+/** BBS upload runs long OpenAI calls; required on Vercel Pro (Hobby max is 10s). */
+export const maxDuration = 60;
+export const runtime = "nodejs";
 
 export default async function DashboardLayout({
   children,
