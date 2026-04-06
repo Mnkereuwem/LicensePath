@@ -135,12 +135,10 @@ export async function extractBbsEntriesFromText(
 }
 
 export async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  try {
-    const result = await parser.getText();
-    return (result.text ?? "").trim();
-  } finally {
-    await parser.destroy();
-  }
+  /* pdf-parse 1.x avoids pdfjs DOM APIs (DOMMatrix) that break in Node / Next server */
+  const pdfParse = (await import("pdf-parse")).default as (
+    data: Buffer,
+  ) => Promise<{ text: string }>;
+  const data = await pdfParse(buffer);
+  return (data.text ?? "").trim();
 }
