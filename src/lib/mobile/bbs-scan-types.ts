@@ -2,6 +2,9 @@
 
 export const BBS_UPLOADS_BUCKET = "bbs-uploads";
 
+/** PDF weekly logs uploaded from Log hours. */
+export const BBS_DOCUMENTS_BUCKET = "bbs-documents";
+
 export const SCAN_LOW_CONFIDENCE_THRESHOLD = 0.72;
 
 export type BbsScanFieldConfidence = {

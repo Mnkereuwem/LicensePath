@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { FileText, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,7 +23,7 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
   const [busy, setBusy] = useState(false);
 
   const runUpload = useCallback(
-    async (file: File) => {
+    async (file: File, confirmDuplicate = false) => {
       if (!file.size) {
         toast.error("Empty file.", {
           description: "Choose a PDF of your BBS weekly log.",
@@ -32,11 +32,14 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
       }
       setBusy(true);
       const loadingId = toast.loading("Uploading and reading your PDF…", {
-        description: "This can take up to a minute on slow connections.",
+        description: confirmDuplicate
+          ? "Processing duplicate file…"
+          : "This can take up to a minute on slow connections.",
       });
       try {
         const fd = new FormData();
         fd.set("file", file);
+        fd.set("confirmDuplicate", confirmDuplicate ? "1" : "0");
         const res = await uploadBbsDocumentAndExtract(fd);
         toast.dismiss(loadingId);
         if (res.ok) {
@@ -48,6 +51,13 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
             description: `Saved ${res.inserted} line(s) and added hours to your weekly log.${weeks}`,
           });
           onSuccess?.();
+        } else if (!res.ok && "duplicateDocument" in res && res.duplicateDocument) {
+          const proceed =
+            typeof window !== "undefined" &&
+            window.confirm(`${res.message}\n\nImport this PDF anyway?`);
+          if (proceed) {
+            await runUpload(file, true);
+          }
         } else {
           toast.error("Upload or OCR failed", { description: res.message });
         }
@@ -66,7 +76,7 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
   );
 
   const onDrop = useCallback(
-    (e: React.DragEvent) => {
+    (e: DragEvent) => {
       e.preventDefault();
       setDragOver(false);
       const f = e.dataTransfer.files[0];
@@ -76,7 +86,7 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
   );
 
   const onPick = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: ChangeEvent<HTMLInputElement>) => {
       const f = e.target.files?.[0];
       if (f) void runUpload(f);
       e.target.value = "";
@@ -97,9 +107,10 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
             </CardTitle>
             <CardDescription className="mt-1">
               <span className="text-foreground font-medium">PDF only</span> —
-              save or export your weekly log as a PDF (phone camera photos are
-              not supported here). We store the file privately, read it with
-              GPT-4o, save lines to{" "}
+              save or export your weekly log as a PDF (camera photos use{" "}
+              <span className="text-foreground font-medium">Scan log</span> in
+              the sidebar). We store the file privately, read it with GPT-4o,
+              save lines to{" "}
               <span className="text-foreground font-medium">hours_logs</span>,
               and add hours to your weekly grid for the matching week
               (Monday–Sunday).

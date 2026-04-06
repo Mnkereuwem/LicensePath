@@ -201,13 +201,39 @@ export async function addParsedBbsEntriesToWeeklyGrid(
     d.direct_clinical += e.clinical_hours;
   }
 
-  const weeksTouched: string[] = [];
-
-  for (const [weekStart, delta] of deltasByWeek) {
+  for (const [, delta] of deltasByWeek) {
     for (const k of HOUR_CATEGORY_KEYS) {
       delta[k] = Math.round(delta[k] * 100) / 100;
     }
+  }
 
+  for (const [weekStart, delta] of deltasByWeek) {
+    const sumRow = emptyHourRecord();
+    for (const e of entries) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) continue;
+      const ws = startOfWeekMonday(new Date(`${e.date}T12:00:00`));
+      if (ws !== weekStart) continue;
+      sumRow.individual_supervision += e.individual_supervision_hours;
+      sumRow.group_supervision += e.group_supervision_hours;
+      sumRow.direct_clinical += e.clinical_hours;
+    }
+    for (const k of HOUR_CATEGORY_KEYS) {
+      sumRow[k] = Math.round(sumRow[k] * 100) / 100;
+    }
+    const TOL = 0.02;
+    for (const k of HOUR_CATEGORY_KEYS) {
+      if (Math.abs(sumRow[k] - delta[k]) > TOL) {
+        return {
+          ok: false,
+          message: `Imported rows for week starting ${weekStart} do not add up (${k}: ${sumRow[k]} vs ${delta[k]}). Nothing was changed.`,
+        };
+      }
+    }
+  }
+
+  const weeksTouched: string[] = [];
+
+  for (const [weekStart, delta] of deltasByWeek) {
     const { data: existingRows, error: fetchErr } = await supabase
       .from("weekly_hour_entries")
       .select("category, hours")

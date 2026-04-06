@@ -12,7 +12,10 @@ import { Camera, ImageIcon, Loader2, ScanLine, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { BbsScanReview } from "@/components/mobile/bbs-scan-review";
-import { extractBbsScanFromStorage } from "@/lib/actions/bbs-scan";
+import {
+  DUPLICATE_SCAN_DOCUMENT_CODE,
+  extractBbsScanFromStorage,
+} from "@/lib/actions/bbs-scan";
 import {
   captureAndUploadBbsScan,
   isNativeBbsScanCamera,
@@ -39,12 +42,26 @@ export function BbsScanClient() {
   const [review, setReview] = useState<{
     storagePath: string;
     previewUrl: string;
+    contentHash: string;
     entries: BbsScanExtractedEntry[];
   } | null>(null);
 
   const runAfterUpload = useCallback(async (storagePath: string) => {
     setPhase("extracting");
-    const ex = await extractBbsScanFromStorage(storagePath);
+    let ex = await extractBbsScanFromStorage(storagePath);
+    if (!ex.ok && "code" in ex && ex.code === DUPLICATE_SCAN_DOCUMENT_CODE) {
+      setPhase("idle");
+      const proceed =
+        typeof window !== "undefined" &&
+        window.confirm(`${ex.message}\n\nProcess this image anyway?`);
+      if (!proceed) {
+        return;
+      }
+      setPhase("extracting");
+      ex = await extractBbsScanFromStorage(storagePath, {
+        confirmDuplicate: true,
+      });
+    }
     setPhase("idle");
     if (!ex.ok) {
       toast.error("Could not read the log", { description: ex.message });
@@ -60,6 +77,7 @@ export function BbsScanClient() {
     setReview({
       storagePath,
       previewUrl: ex.previewSignedUrl,
+      contentHash: ex.contentHash,
       entries: ex.entries,
     });
   }, []);
@@ -98,6 +116,7 @@ export function BbsScanClient() {
       <BbsScanReview
         previewUrl={review.previewUrl}
         storagePath={review.storagePath}
+        contentHash={review.contentHash}
         extracted={review.entries}
         onCancel={() => setReview(null)}
         onDone={() => {

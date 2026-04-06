@@ -32,12 +32,14 @@ function lowClass(v: number): string {
 export function BbsScanReview({
   previewUrl,
   storagePath,
+  contentHash,
   extracted,
   onDone,
   onCancel,
 }: {
   previewUrl: string;
   storagePath: string;
+  contentHash: string;
   extracted: BbsScanExtractedEntry[];
   onDone: () => void;
   onCancel: () => void;
@@ -56,6 +58,31 @@ export function BbsScanReview({
   const [rows, setRows] = useState<BbsScanConfirmRowInput[]>(initialRows);
   const [saving, setSaving] = useState(false);
 
+  const totals = useMemo(() => {
+    let clinical = 0;
+    let supervision = 0;
+    for (const r of rows) {
+      clinical += Math.max(0, r.direct_clinical_counseling_hours);
+      supervision += Math.max(0, r.non_clinical_supervision_hours);
+    }
+    return {
+      clinical: Math.round(clinical * 100) / 100,
+      supervision: Math.round(supervision * 100) / 100,
+    };
+  }, [rows]);
+
+  const duplicateServiceDates = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      if (!r.work_date) continue;
+      counts.set(r.work_date, (counts.get(r.work_date) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .filter(([, n]) => n > 1)
+      .map(([d]) => d)
+      .sort();
+  }, [rows]);
+
   function updateRow(
     index: number,
     patch: Partial<BbsScanConfirmRowInput>,
@@ -70,6 +97,7 @@ export function BbsScanReview({
     try {
       const res = await confirmBbsScanAndSave({
         storagePath,
+        contentHash,
         rows,
         fileNameHint: storagePath.split("/").pop(),
       });
@@ -96,6 +124,28 @@ export function BbsScanReview({
           <span className="text-foreground font-medium">hours_logs</span> until
           you confirm.
         </CardDescription>
+        <div className="text-muted-foreground border-border/60 bg-muted/40 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-sm">
+          <span>
+            <span className="text-foreground font-medium">Σ Clinical:</span>{" "}
+            {totals.clinical}h
+          </span>
+          <span>
+            <span className="text-foreground font-medium">Σ Supervision:</span>{" "}
+            {totals.supervision}h
+          </span>
+          <span>
+            <span className="text-foreground font-medium">Rows:</span>{" "}
+            {rows.length}
+          </span>
+        </div>
+        {duplicateServiceDates.length > 0 ? (
+          <p className="text-amber-700 dark:text-amber-500 text-sm">
+            Multiple rows share the same service date (
+            {duplicateServiceDates.join(", ")}). Hours for those days will add
+            together in your weekly log—correct the dates if that is not what
+            you want.
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="grid gap-6 lg:grid-cols-2">
         <div className="bg-muted border-border/60 flex max-h-[min(70vh,520px)] min-h-[200px] items-center justify-center overflow-auto rounded-xl border lg:max-h-none lg:min-h-[320px]">

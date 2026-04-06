@@ -1,5 +1,3 @@
-import type { WeeklySupervisionRatioStatus } from "@/lib/compliance/bbs-rules";
-
 export type DashboardHourSnapshot = {
   totalCredited: number;
   directClinicalCredited: number;
@@ -17,8 +15,6 @@ export type DashboardWeekSnapshot = {
 export type DashboardModel = {
   hours: DashboardHourSnapshot;
   week: DashboardWeekSnapshot;
-  ratioStatus: WeeklySupervisionRatioStatus;
-  supervisionLabel: "Valid" | "Invalid";
   cappedWeekTotal: number;
   totalProgressPercent: number;
   sunset: {

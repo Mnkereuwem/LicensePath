@@ -2,17 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 
+import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
+import { countHoursLogsByContentHash } from "@/lib/hours/hours-log-content-hash";
 import {
   extractBbsEntriesFromPdfBuffer,
   extractBbsEntriesFromText,
   extractTextFromPdfBuffer,
   type ParsedBbsEntry,
 } from "@/lib/openai/bbs-ocr";
-import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
+import { BBS_DOCUMENTS_BUCKET } from "@/lib/mobile/bbs-scan-types";
+import { sha256HexBuffer } from "@/lib/server/sha256-buffer";
 import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-const BUCKET = "bbs-documents";
 const MAX_BYTES = 10 * 1024 * 1024;
 
 function resolvePdfMime(file: File, buf: Buffer): string {
@@ -31,12 +33,24 @@ function safeFileName(name: string): string {
   return base.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 180);
 }
 
+export type UploadBbsDocumentResult =
+  | {
+      ok: true;
+      inserted: number;
+      storagePath: string;
+      weeksUpdated: string[];
+    }
+  | { ok: false; message: string }
+  | {
+      ok: false;
+      duplicateDocument: true;
+      message: string;
+      priorLineCount: number;
+    };
+
 export async function uploadBbsDocumentAndExtract(
   formData: FormData,
-): Promise<
-  | { ok: true; inserted: number; storagePath: string; weeksUpdated: string[] }
-  | { ok: false; message: string }
-> {
+): Promise<UploadBbsDocumentResult> {
   const file = formData.get("file");
   if (!(file instanceof File)) {
     return { ok: false, message: "No file uploaded." };
@@ -64,6 +78,28 @@ export async function uploadBbsDocumentAndExtract(
     return { ok: false, message: "Not signed in." };
   }
 
+  const contentHash = sha256HexBuffer(buf);
+  const confirmDuplicate = formData.get("confirmDuplicate") === "1";
+
+  if (!confirmDuplicate) {
+    const { count, error: cntErr } = await countHoursLogsByContentHash(
+      supabase,
+      user.id,
+      contentHash,
+    );
+    if (cntErr) {
+      return { ok: false, message: cntErr };
+    }
+    if (count > 0) {
+      return {
+        ok: false,
+        duplicateDocument: true,
+        priorLineCount: count,
+        message: `This exact PDF was already imported (${count} saved line(s) from a prior upload). Processing again would duplicate hours in your weekly log. Continue only if you mean to add another copy.`,
+      };
+    }
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("organization_id")
@@ -82,7 +118,7 @@ export async function uploadBbsDocumentAndExtract(
   const storagePath = `${user.id}/${Date.now()}_${safeFileName(file.name)}`;
 
   const { error: upErr } = await supabase.storage
-    .from(BUCKET)
+    .from(BBS_DOCUMENTS_BUCKET)
     .upload(storagePath, buf, {
       contentType: "application/pdf",
       upsert: false,
@@ -127,7 +163,12 @@ export async function uploadBbsDocumentAndExtract(
   }
 
   const ocrRawFirst = JSON.parse(
-    JSON.stringify({ model: "gpt-4o", fileName: file.name, entries }),
+    JSON.stringify({
+      model: "gpt-4o",
+      fileName: file.name,
+      contentHash,
+      entries,
+    }),
   ) as Record<string, unknown>;
 
   const rows = entries.map((e, i) => ({
@@ -139,6 +180,7 @@ export async function uploadBbsDocumentAndExtract(
     group_supervision_hours: e.group_supervision_hours,
     clinical_hours: e.clinical_hours,
     source_storage_path: storagePath,
+    source_content_hash: contentHash,
     ocr_raw: i === 0 ? ocrRawFirst : null,
   }));
 
@@ -147,7 +189,9 @@ export async function uploadBbsDocumentAndExtract(
   if (insErr) {
     return {
       ok: false,
-      message: insErr.message,
+      message: insErr.message.includes("source_content_hash")
+        ? `${insErr.message} Apply migration supabase/migrations/20260416120000_hours_logs_content_hash.sql (or npm run db:content-hash).`
+        : insErr.message,
     };
   }
 

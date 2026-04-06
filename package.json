@@ -12,6 +12,7 @@
     "db:fix-rls": "node scripts/apply-licensepath-schema.cjs supabase/migrations/20260408100000_fix_profiles_rls_recursion.sql",
     "db:bbs-storage": "node scripts/apply-licensepath-schema.cjs supabase/migrations/20260410000000_hours_logs_and_bbs_storage.sql",
     "db:bbs-uploads": "node scripts/apply-licensepath-schema.cjs supabase/migrations/20260415000000_bbs_uploads_bucket.sql",
+    "db:content-hash": "node scripts/apply-licensepath-schema.cjs supabase/migrations/20260416120000_hours_logs_content_hash.sql",
     "cap:sync": "npx cap sync",
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android"

@@ -4,10 +4,8 @@ import {
   NON_CLINICAL_MAX,
   TOTAL_HOURS_TARGET,
   capWeeklyCreditableHours,
-  formatSupervisionRatioLabel,
   getSunsetDaysRemaining,
   getSunsetEndDate,
-  getWeeklySupervisionRatioStatus,
 } from "@/lib/compliance/bbs-rules";
 import type { DashboardModel } from "@/lib/dashboard/model";
 import { startOfWeekMonday } from "@/lib/dates/week";
@@ -131,12 +129,6 @@ export async function fetchDashboardModel(): Promise<{
     "credited_hours",
   );
 
-  const ratioStatus = getWeeklySupervisionRatioStatus({
-    clinicalHours,
-    individualSupervisionHours,
-    groupSupervisionHours,
-  });
-
   const { data: clockRow, error: clockError } = await supabase
     .from("supervisee_license_clocks")
     .select("bbs_registration_at")
@@ -167,8 +159,6 @@ export async function fetchDashboardModel(): Promise<{
         groupSupervisionHours,
         rawTotalHours,
       },
-      ratioStatus,
-      supervisionLabel: formatSupervisionRatioLabel(ratioStatus),
       cappedWeekTotal: capWeeklyCreditableHours(cappedWeekTotalRaw),
       totalProgressPercent: Math.min(
         100,

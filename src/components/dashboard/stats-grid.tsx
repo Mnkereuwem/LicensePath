@@ -1,8 +1,7 @@
-import { AlertTriangle, CalendarClock, Target } from "lucide-react";
+import { CalendarClock, Target } from "lucide-react";
 
 import type { DashboardModel } from "@/lib/dashboard/model";
 import { WEEKLY_CREDIT_CAP } from "@/lib/compliance/bbs-rules";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -20,11 +19,7 @@ function formatDate(d: Date) {
 }
 
 export function StatsGrid({ model }: { model: DashboardModel }) {
-  const { hours, week, ratioStatus, supervisionLabel, cappedWeekTotal, sunset, targets } =
-    model;
-
-  const invalid = ratioStatus === "invalid";
-  const notApplicable = ratioStatus === "not_applicable";
+  const { hours, week, cappedWeekTotal, sunset, targets } = model;
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -90,37 +85,13 @@ export function StatsGrid({ model }: { model: DashboardModel }) {
 
       <Card className="lg:col-span-1">
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold">
-            This week: supervision ratio
-          </CardTitle>
+          <CardTitle className="text-lg font-semibold">This week</CardTitle>
           <CardDescription>
-            If clinical hours are logged, credit requires{" "}
-            <span className="text-foreground font-medium">1h individual</span>{" "}
-            or{" "}
-            <span className="text-foreground font-medium">2h group</span>{" "}
-            supervision.
+            Reported hours for the current Monday-start week (face-to-face +
+            other direct clinical in the clinical total).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant={invalid ? "destructive" : "secondary"}
-              className="text-sm"
-            >
-              {supervisionLabel}
-            </Badge>
-            {invalid && (
-              <span className="text-destructive flex items-center gap-1 text-sm font-medium">
-                <AlertTriangle className="size-4 shrink-0" aria-hidden />
-                Incomplete — supervision below ratio
-              </span>
-            )}
-            {notApplicable && (
-              <span className="text-muted-foreground text-sm">
-                No clinical hours logged this week.
-              </span>
-            )}
-          </div>
           <dl className="grid gap-2 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Clinical hours</dt>

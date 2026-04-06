@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
 import { BBS_DAILY_CLINICAL_HOURS_MAX } from "@/lib/compliance/bbs-rules";
+import { countHoursLogsByContentHash } from "@/lib/hours/hours-log-content-hash";
 import {
   BBS_UPLOADS_BUCKET,
   type BbsScanConfirmRowInput,
@@ -11,8 +12,27 @@ import {
 } from "@/lib/mobile/bbs-scan-types";
 import { extractBbsRowsFromScanImage } from "@/lib/openai/bbs-scan-extract";
 import type { ParsedBbsEntry } from "@/lib/openai/bbs-ocr";
+import { sha256HexBuffer } from "@/lib/server/sha256-buffer";
 import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+export const DUPLICATE_SCAN_DOCUMENT_CODE = "duplicate_document" as const;
+
+export type ExtractBbsScanResult =
+  | {
+      ok: true;
+      entries: BbsScanExtractedEntry[];
+      previewSignedUrl: string;
+      contentHash: string;
+    }
+  | { ok: false; message: string }
+  | {
+      ok: false;
+      code: typeof DUPLICATE_SCAN_DOCUMENT_CODE;
+      message: string;
+      priorLineCount: number;
+      contentHash: string;
+    };
 
 function assertOwnPath(userId: string, storagePath: string): boolean {
   const first = storagePath.split("/")[0];
@@ -28,14 +48,8 @@ function mimeFromPath(path: string): "image/jpeg" | "image/png" | "image/webp" {
 
 export async function extractBbsScanFromStorage(
   storagePath: string,
-): Promise<
-  | {
-      ok: true;
-      entries: BbsScanExtractedEntry[];
-      previewSignedUrl: string;
-    }
-  | { ok: false; message: string }
-> {
+  options?: { confirmDuplicate?: boolean },
+): Promise<ExtractBbsScanResult> {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -59,6 +73,28 @@ export async function extractBbsScanFromStorage(
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
+  const contentHash = sha256HexBuffer(buf);
+
+  if (!options?.confirmDuplicate) {
+    const { count, error: cntErr } = await countHoursLogsByContentHash(
+      supabase,
+      user.id,
+      contentHash,
+    );
+    if (cntErr) {
+      return { ok: false, message: cntErr };
+    }
+    if (count > 0) {
+      return {
+        ok: false,
+        code: DUPLICATE_SCAN_DOCUMENT_CODE,
+        contentHash,
+        priorLineCount: count,
+        message: `This exact image was already processed (${count} saved line(s)). Reading it again would duplicate hours. Continue only if you intend to add another copy.`,
+      };
+    }
+  }
+
   const mime = mimeFromPath(storagePath);
   const base64 = buf.toString("base64");
 
@@ -85,6 +121,7 @@ export async function extractBbsScanFromStorage(
     ok: true,
     entries,
     previewSignedUrl: signed.signedUrl,
+    contentHash,
   };
 }
 
@@ -92,6 +129,7 @@ export async function confirmBbsScanAndSave(input: {
   storagePath: string;
   rows: BbsScanConfirmRowInput[];
   fileNameHint?: string;
+  contentHash: string;
 }): Promise<
   { ok: true; inserted: number; weeksUpdated: string[] } | { ok: false; message: string }
 > {
@@ -108,6 +146,31 @@ export async function confirmBbsScanAndSave(input: {
 
   if (!input.rows.length) {
     return { ok: false, message: "Nothing to save." };
+  }
+
+  if (
+    typeof input.contentHash !== "string" ||
+    !/^[a-f0-9]{64}$/.test(input.contentHash)
+  ) {
+    return { ok: false, message: "Missing or invalid document fingerprint." };
+  }
+
+  const { data: verifyFile, error: vErr } = await supabase.storage
+    .from(BBS_UPLOADS_BUCKET)
+    .download(input.storagePath);
+
+  if (vErr || !verifyFile) {
+    return {
+      ok: false,
+      message: vErr?.message ?? "Could not verify scan file before save.",
+    };
+  }
+  const verifyBuf = Buffer.from(await verifyFile.arrayBuffer());
+  if (sha256HexBuffer(verifyBuf) !== input.contentHash) {
+    return {
+      ok: false,
+      message: "Scan file changed since preview. Go back and scan again.",
+    };
   }
 
   for (const r of input.rows) {
@@ -149,6 +212,7 @@ export async function confirmBbsScanAndSave(input: {
     JSON.stringify({
       model: "gpt-4o",
       source: "mobile_scan",
+      contentHash: input.contentHash,
       fileName: input.fileNameHint ?? input.storagePath,
       rows: input.rows,
     }),
@@ -163,12 +227,18 @@ export async function confirmBbsScanAndSave(input: {
     group_supervision_hours: Math.max(0, r.non_clinical_supervision_hours),
     clinical_hours: Math.max(0, r.direct_clinical_counseling_hours),
     source_storage_path: input.storagePath,
+    source_content_hash: input.contentHash,
     ocr_raw: i === 0 ? ocrRawFirst : null,
   }));
 
   const { error: insErr } = await supabase.from("hours_logs").insert(dbRows);
   if (insErr) {
-    return { ok: false, message: insErr.message };
+    return {
+      ok: false,
+      message: insErr.message.includes("source_content_hash")
+        ? `${insErr.message} Apply migration supabase/migrations/20260416120000_hours_logs_content_hash.sql (or npm run db:content-hash).`
+        : insErr.message,
+    };
   }
 
   const grid = await addParsedBbsEntriesToWeeklyGrid(parsedForGrid);

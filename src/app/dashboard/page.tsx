@@ -15,8 +15,8 @@ export default async function DashboardPage() {
           Dashboard
         </h1>
         <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed">
-          Live totals from your logged weeks, supervision ratio for the current
-          week (Monday start), and your six-year ASW registration clock.
+          Live totals from your logged weeks, current-week hour snapshot, and
+          your six-year ASW registration clock.
         </p>
       </div>
       {warnings.length > 0 ? (
