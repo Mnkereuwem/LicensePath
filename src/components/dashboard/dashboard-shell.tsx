@@ -29,7 +29,9 @@ export function DashboardShell({
         <DashboardSidebar userLabel={userLabel} userEmail={userEmail} />
       </aside>
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="bg-background/85 supports-backdrop-filter:bg-background/65 sticky top-0 z-40 flex h-14 items-center gap-2 border-b px-3 backdrop-blur-md md:hidden">
+        <header
+          className="bg-background/85 supports-backdrop-filter:bg-background/65 sticky top-0 z-40 flex min-h-14 items-center gap-2 border-b px-3 pt-[max(0px,env(safe-area-inset-top))] backdrop-blur-md md:hidden"
+        >
           <Sheet>
             <SheetTrigger
               className={cn(

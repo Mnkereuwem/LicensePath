@@ -8,6 +8,15 @@ export const DIRECT_CLINICAL_MIN = 2000;
 export const FACE_TO_FACE_MIN = 750;
 export const NON_CLINICAL_MAX = 1000;
 export const WEEKLY_CREDIT_CAP = 40;
+
+/**
+ * ASW weekly log shows max 40h/week; guardrail for OCR line items so a single day’s
+ * “direct clinical / counseling” bucket does not explode. Tune with counsel.
+ */
+export const BBS_DAILY_CLINICAL_HOURS_MAX = 10;
+
+/** When log lines omit the year, extraction assumes this cycle year (user request). */
+export const DEFAULT_EXPERIENCE_YEAR = 2026;
 export const SUNSET_YEARS = 6;
 
 /** Minimum individual supervision hours per week when clinical hours are logged. */

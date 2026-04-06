@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Camera,
   Clock,
   FileText,
   LayoutDashboard,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/hours", label: "Log hours", icon: Clock },
+  { href: "/dashboard/scan", label: "Scan log", icon: Camera },
   { href: "/dashboard/supervision", label: "Supervision", icon: Users },
   { href: "/dashboard/exports", label: "BBS exports", icon: FileText },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },

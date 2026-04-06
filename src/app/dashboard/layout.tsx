@@ -1,4 +1,5 @@
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { MobileAppLayout } from "@/components/mobile/mobile-app-layout";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ export default async function DashboardLayout({
 
   return (
     <DashboardShell userLabel={userLabel} userEmail={user?.email ?? ""}>
-      {children}
+      <MobileAppLayout>{children}</MobileAppLayout>
     </DashboardShell>
   );
 }
