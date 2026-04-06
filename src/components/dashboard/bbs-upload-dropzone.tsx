@@ -35,8 +35,12 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
         fd.set("file", file);
         const res = await uploadBbsDocumentAndExtract(fd);
         if (res.ok) {
+          const weeks =
+            res.weeksUpdated.length === 0
+              ? ""
+              : ` Open the log for week starting ${res.weeksUpdated.join(", ")} (Monday dates).`;
           toast.success("Hours imported", {
-            description: `Saved ${res.inserted} row(s) to hours_logs (Supabase → Table Editor).`,
+            description: `Saved ${res.inserted} line(s) and added hours to your weekly log.${weeks}`,
           });
           onSuccess?.();
         } else {
@@ -80,10 +84,10 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
               Upload BBS log (photo or PDF)
             </CardTitle>
             <CardDescription className="mt-1">
-              We store the file privately, then use GPT-4o to read dates,
-              supervision hours, clinical hours, and site name into{" "}
-              <span className="text-foreground font-medium">hours_logs</span>.
-              Scanned PDFs work best as a clear image (PNG/JPEG).
+              We store the file privately, use GPT-4o to read your log, save lines to{" "}
+              <span className="text-foreground font-medium">hours_logs</span>, and
+              add those hours into this page and the dashboard for the matching week
+              (Monday–Sunday).
             </CardDescription>
           </div>
         </div>

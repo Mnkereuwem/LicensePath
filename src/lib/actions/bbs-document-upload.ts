@@ -4,9 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import {
   extractBbsEntriesFromImageDataUrl,
+  extractBbsEntriesFromPdfBuffer,
   extractBbsEntriesFromText,
   extractTextFromPdfBuffer,
+  type ParsedBbsEntry,
 } from "@/lib/openai/bbs-ocr";
+import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
 import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -29,7 +32,7 @@ function safeFileName(name: string): string {
 export async function uploadBbsDocumentAndExtract(
   formData: FormData,
 ): Promise<
-  | { ok: true; inserted: number; storagePath: string }
+  | { ok: true; inserted: number; storagePath: string; weeksUpdated: string[] }
   | { ok: false; message: string }
 > {
   const file = formData.get("file");
@@ -57,7 +60,7 @@ export async function uploadBbsDocumentAndExtract(
     return { ok: false, message: "Not signed in." };
   }
 
-  let { data: profile } = await supabase
+  const { data: profile } = await supabase
     .from("profiles")
     .select("organization_id")
     .eq("id", user.id)
@@ -91,18 +94,17 @@ export async function uploadBbsDocumentAndExtract(
     };
   }
 
-  let entries;
+  let entries: ParsedBbsEntry[] = [];
   try {
     if (mime === "application/pdf") {
       const text = await extractTextFromPdfBuffer(buf);
-      if (text.length < 40) {
-        return {
-          ok: false,
-          message:
-            "Could not read enough text from this PDF (it may be scanned). Try exporting a page as an image (PNG/JPEG) and upload that instead.",
-        };
+      if (text.length >= 40) {
+        entries = await extractBbsEntriesFromText(text);
       }
-      entries = await extractBbsEntriesFromText(text);
+      if (!entries.length) {
+        /* pdf-parse often sees only the blank BBS template; Responses API uses page images */
+        entries = await extractBbsEntriesFromPdfBuffer(buf, file.name);
+      }
     } else {
       const b64 = buf.toString("base64");
       const dataUrl = `data:${mime};base64,${b64}`;
@@ -117,7 +119,7 @@ export async function uploadBbsDocumentAndExtract(
     return {
       ok: false,
       message:
-        "No hour rows were extracted. Try a clearer photo or check that the form shows dates and hours.",
+        "No hour rows were extracted. The PDF may be a blank template, or dates and hours are not visible. Fill the BBS log (including “Week of” dates) and re-upload, or use a clear photo/scan.",
     };
   }
 
@@ -146,8 +148,21 @@ export async function uploadBbsDocumentAndExtract(
     };
   }
 
+  const grid = await addParsedBbsEntriesToWeeklyGrid(entries);
+  if (!grid.ok) {
+    return {
+      ok: false,
+      message: `${grid.message} (OCR rows are in hours_logs; weekly grid was not updated.)`,
+    };
+  }
+
   revalidatePath("/dashboard/hours");
   revalidatePath("/dashboard");
 
-  return { ok: true, inserted: rows.length, storagePath };
+  return {
+    ok: true,
+    inserted: rows.length,
+    storagePath,
+    weeksUpdated: grid.weeksTouched,
+  };
 }
