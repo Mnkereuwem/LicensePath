@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Save } from "lucide-react";
 import { toast } from "sonner";
 
+import { BbsUploadDropzone } from "@/components/dashboard/bbs-upload-dropzone";
 import { saveWeekHours } from "@/lib/actions/hours";
 import { WEEKLY_CREDIT_CAP } from "@/lib/compliance/bbs-rules";
 import {
@@ -103,6 +104,8 @@ export function HoursEditor({
           to your record.
         </p>
       </div>
+
+      <BbsUploadDropzone onSuccess={() => router.refresh()} />
 
       <Card className="border-border/60 shadow-lg shadow-black/20">
         <CardHeader className="pb-4">

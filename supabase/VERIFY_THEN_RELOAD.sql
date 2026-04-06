@@ -13,11 +13,12 @@ where n.nspname = 'public'
     'organizations',
     'profiles',
     'supervisee_license_clocks',
-    'weekly_hour_entries'
+    'weekly_hour_entries',
+    'hours_logs'
   )
 order by 1;
 
--- If you get FEWER than 4 rows above, the schema was never created on THIS project.
+-- If any table in the list is missing on THIS project, create it (see repo SQL migrations).
 -- Run the full script: supabase/RUN_IN_SUPABASE_SQL_EDITOR.sql (entire file, then Run).
 
 -- If you get all 4 rows but the app still says PGRST205:

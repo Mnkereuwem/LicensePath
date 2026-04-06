@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:apply": "node scripts/apply-licensepath-schema.cjs",
-    "db:fix-rls": "node scripts/apply-licensepath-schema.cjs supabase/migrations/20260408100000_fix_profiles_rls_recursion.sql"
+    "db:fix-rls": "node scripts/apply-licensepath-schema.cjs supabase/migrations/20260408100000_fix_profiles_rls_recursion.sql",
+    "db:bbs-storage": "node scripts/apply-licensepath-schema.cjs supabase/migrations/20260410000000_hours_logs_and_bbs_storage.sql"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -19,6 +20,8 @@
     "lucide-react": "^1.7.0",
     "next": "16.2.2",
     "next-themes": "^0.4.6",
+    "openai": "^6.33.0",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.1.2",
@@ -29,6 +32,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
