@@ -1,3 +1,5 @@
+import "server-only";
+
 import OpenAI from "openai";
 
 export type ParsedBbsEntry = {
@@ -26,6 +28,23 @@ Rules:
 
 const MAX_ENTRIES = 50;
 const MAX_PDF_TEXT_CHARS = 120_000;
+
+function getOpenAiApiKey(): string {
+  const raw = process.env["OPENAI_API_KEY"];
+  if (typeof raw !== "string") return "";
+  /* trim + strip stray CR (Windows editors) */
+  return raw.trim().replace(/\r$/, "");
+}
+
+function requireOpenAiKey(): string {
+  const key = getOpenAiApiKey();
+  if (!key) {
+    throw new Error(
+      "OPENAI_API_KEY is missing. Add it to .env.local at the project root (OPENAI_API_KEY=sk-...), save, then fully restart \"npm run dev\". On Vercel: Project Settings → Environment Variables → add OPENAI_API_KEY for Production (and Preview if needed), then Redeploy.",
+    );
+  }
+  return key;
+}
 
 function clampHours(n: unknown): number {
   const x =
@@ -73,11 +92,7 @@ function parseOpenAiJson(content: string): ParsedBbsEntry[] {
 export async function extractBbsEntriesFromImageDataUrl(
   dataUrl: string,
 ): Promise<ParsedBbsEntry[]> {
-  const apiKey = process.env.OPENAI_API_KEY ?? "";
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
-  const openai = new OpenAI({ apiKey });
+  const openai = new OpenAI({ apiKey: requireOpenAiKey() });
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -109,11 +124,7 @@ export async function extractBbsEntriesFromImageDataUrl(
 export async function extractBbsEntriesFromText(
   documentText: string,
 ): Promise<ParsedBbsEntry[]> {
-  const apiKey = process.env.OPENAI_API_KEY ?? "";
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
-  const openai = new OpenAI({ apiKey });
+  const openai = new OpenAI({ apiKey: requireOpenAiKey() });
   const text = documentText.slice(0, MAX_PDF_TEXT_CHARS);
 
   const completion = await openai.chat.completions.create({
