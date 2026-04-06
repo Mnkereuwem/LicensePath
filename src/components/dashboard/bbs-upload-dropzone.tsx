@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { FileImage, FileText, Loader2, Upload } from "lucide-react";
+import { FileText, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { uploadBbsDocumentAndExtract } from "@/lib/actions/bbs-document-upload";
@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-/* Broad `image/*` avoids iOS/WebKit silently dropping picks when MIME doesn’t match a narrow list */
-const ACCEPT = "image/*,application/pdf,.pdf";
+const ACCEPT = "application/pdf,.pdf";
 
 export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,12 +26,12 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
     async (file: File) => {
       if (!file.size) {
         toast.error("Empty file.", {
-          description: "Try another photo or export as JPEG from your gallery.",
+          description: "Choose a PDF of your BBS weekly log.",
         });
         return;
       }
       setBusy(true);
-      const loadingId = toast.loading("Uploading and reading your log…", {
+      const loadingId = toast.loading("Uploading and reading your PDF…", {
         description: "This can take up to a minute on slow connections.",
       });
       try {
@@ -94,13 +93,16 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
           </div>
           <div className="min-w-0 flex-1">
             <CardTitle className="text-base leading-snug">
-              Upload BBS log (photo or PDF)
+              Upload BBS log (PDF only)
             </CardTitle>
             <CardDescription className="mt-1">
-              Phone photos work (JPEG, PNG, HEIC): we normalize orientation and format
-              before OCR. Files are stored privately; hours go to{" "}
-              <span className="text-foreground font-medium">hours_logs</span> and your
-              weekly grid for the matching week (Monday–Sunday).
+              <span className="text-foreground font-medium">PDF only</span> —
+              save or export your weekly log as a PDF (phone camera photos are
+              not supported here). We store the file privately, read it with
+              GPT-4o, save lines to{" "}
+              <span className="text-foreground font-medium">hours_logs</span>,
+              and add hours to your weekly grid for the matching week
+              (Monday–Sunday).
             </CardDescription>
           </div>
         </div>
@@ -148,18 +150,17 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
                 aria-hidden
               />
             ) : (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Upload className="size-8" aria-hidden />
-                <FileImage className="size-8 opacity-70" aria-hidden />
+              <div className="flex items-center justify-center text-muted-foreground">
+                <Upload className="size-10" aria-hidden />
               </div>
             )}
             <p className="text-foreground text-sm font-medium">
               {busy
                 ? "Uploading and extracting…"
-                : "Drop a file here, or click to choose"}
+                : "Drop a PDF here, or click to choose"}
             </p>
             <p className="text-muted-foreground max-w-md text-xs leading-relaxed">
-              JPEG / PNG / WebP / GIF / PDF · max 10 MB · requires{" "}
+              PDF only · max 10 MB · needs{" "}
               <code className="text-foreground/80 bg-muted rounded px-1">
                 OPENAI_API_KEY
               </code>{" "}
@@ -172,7 +173,7 @@ export function BbsUploadDropzone({ onSuccess }: { onSuccess?: () => void }) {
               className="pointer-events-none mt-1"
               tabIndex={-1}
             >
-              Choose file
+              Choose PDF
             </Button>
           </div>
         </div>

@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 
 import {
-  extractBbsEntriesFromImageDataUrl,
   extractBbsEntriesFromPdfBuffer,
   extractBbsEntriesFromText,
   extractTextFromPdfBuffer,
@@ -12,23 +11,20 @@ import {
 import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
 import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import {
-  prepareRasterForOcr,
-  resolveEffectiveMime,
-} from "@/lib/uploads/raster-normalize";
 
 const BUCKET = "bbs-documents";
 const MAX_BYTES = 10 * 1024 * 1024;
 
-const ALLOWED = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/heic",
-  "image/heif",
-  "application/pdf",
-]);
+function resolvePdfMime(file: File, buf: Buffer): string {
+  const t = (file.type || "").toLowerCase().trim();
+  if (t === "application/pdf") return t;
+  const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (buf.length >= 5 && buf.subarray(0, 5).toString("ascii") === "%PDF-") {
+    return "application/pdf";
+  }
+  return t || "application/octet-stream";
+}
 
 function safeFileName(name: string): string {
   const base = name.split(/[/\\]/).pop() ?? "upload";
@@ -50,13 +46,13 @@ export async function uploadBbsDocumentAndExtract(
     return { ok: false, message: "File must be 10MB or smaller." };
   }
 
-  let buf = Buffer.from(await file.arrayBuffer());
-  const mime = resolveEffectiveMime(file, buf).toLowerCase();
-  if (!ALLOWED.has(mime)) {
+  const buf = Buffer.from(await file.arrayBuffer());
+  const mime = resolvePdfMime(file, buf).toLowerCase();
+  if (mime !== "application/pdf") {
     return {
       ok: false,
       message:
-        "Use a JPEG, PNG, WebP, GIF, HEIC/HEIF, or PDF. On phones, try again if the gallery picked an unsupported type.",
+        "Only PDF files are supported. Export or save your BBS log as a PDF, then upload it here. (Photos and scans must be saved as PDF first.)",
     };
   }
 
@@ -85,24 +81,10 @@ export async function uploadBbsDocumentAndExtract(
 
   const storagePath = `${user.id}/${Date.now()}_${safeFileName(file.name)}`;
 
-  let uploadBody: Buffer = buf;
-  let contentType = mime;
-  if (mime !== "application/pdf") {
-    try {
-      const prepared = await prepareRasterForOcr(buf, mime);
-      uploadBody = prepared.buf;
-      contentType = prepared.contentType;
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : "Could not process this image.";
-      return { ok: false, message: msg };
-    }
-  }
-
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, uploadBody, {
-      contentType,
+    .upload(storagePath, buf, {
+      contentType: "application/pdf",
       upsert: false,
     });
 
@@ -117,19 +99,12 @@ export async function uploadBbsDocumentAndExtract(
 
   let entries: ParsedBbsEntry[] = [];
   try {
-    if (mime === "application/pdf") {
-      const text = await extractTextFromPdfBuffer(buf);
-      if (text.length >= 40) {
-        entries = await extractBbsEntriesFromText(text);
-      }
-      if (!entries.length) {
-        /* pdf-parse often sees only the blank BBS template; Responses API uses page images */
-        entries = await extractBbsEntriesFromPdfBuffer(buf, file.name);
-      }
-    } else {
-      const b64 = uploadBody.toString("base64");
-      const dataUrl = `data:${contentType};base64,${b64}`;
-      entries = await extractBbsEntriesFromImageDataUrl(dataUrl);
+    const text = await extractTextFromPdfBuffer(buf);
+    if (text.length >= 40) {
+      entries = await extractBbsEntriesFromText(text);
+    }
+    if (!entries.length) {
+      entries = await extractBbsEntriesFromPdfBuffer(buf, file.name);
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "OCR failed.";
@@ -147,7 +122,7 @@ export async function uploadBbsDocumentAndExtract(
     return {
       ok: false,
       message:
-        "No hour rows were extracted. The PDF may be a blank template, or dates and hours are not visible. Fill the BBS log (including “Week of” dates) and re-upload, or use a clear photo/scan.",
+        "No hour rows were extracted from this PDF. Use a filled BBS log with visible “Week of” dates and hours, or a clearer export.",
     };
   }
 

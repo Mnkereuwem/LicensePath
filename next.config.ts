@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* pdf-parse 1.x bundles for Node; keep external to avoid Turbopack issues */
-  serverExternalPackages: ["pdf-parse", "sharp"],
+  serverExternalPackages: ["pdf-parse"],
   experimental: {
     /**
      * Default Server Action body limit is ~1mb; phone photos exceed that and the client

@@ -224,38 +224,6 @@ function parseOpenAiJson(content: string): ParsedBbsEntry[] {
   return out;
 }
 
-export async function extractBbsEntriesFromImageDataUrl(
-  dataUrl: string,
-): Promise<ParsedBbsEntry[]> {
-  const openai = new OpenAI({ apiKey: requireOpenAiKey() });
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    temperature: 0.1,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: `${PDF_USER_INSTRUCTIONS} Return JSON per the system instructions.`,
-          },
-          {
-            type: "image_url",
-            image_url: { url: dataUrl },
-          },
-        ],
-      },
-    ],
-  });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) return [];
-  return parseOpenAiJson(content);
-}
-
 export async function extractBbsEntriesFromText(
   documentText: string,
 ): Promise<ParsedBbsEntry[]> {
