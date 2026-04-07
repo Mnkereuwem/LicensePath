@@ -110,6 +110,15 @@ async function extractBbsScanFromStorageImpl(
       contentHash,
     );
     if (cntErr) {
+      if (
+        /source_content_hash|column .* does not exist|42703/i.test(cntErr)
+      ) {
+        return {
+          ok: false,
+          message:
+            "Database is missing hours_logs.source_content_hash. Apply supabase/migrations/20260416120000_hours_logs_content_hash.sql (or run: npm run db:content-hash) on this Supabase project, then try again.",
+        };
+      }
       return { ok: false, message: cntErr };
     }
     if (count > 0) {

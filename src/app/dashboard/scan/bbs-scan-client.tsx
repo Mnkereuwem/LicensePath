@@ -22,6 +22,7 @@ import {
   uploadBbsScanFromFile,
 } from "@/lib/mobile/scan-service";
 import type { BbsScanExtractedEntry } from "@/lib/mobile/bbs-scan-types";
+import { describeScanFailure } from "@/lib/mobile/scan-error-message";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,25 +31,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-function describeScanFailure(messageOrError: string | unknown): string {
-  const msg =
-    typeof messageOrError === "string"
-      ? messageOrError
-      : messageOrError instanceof Error
-        ? messageOrError.message
-        : "Something went wrong.";
-  if (
-    /Server Components render|digest/i.test(msg) ||
-    /Execution timed out|FUNCTION_INVOCATION_TIMEOUT|504/i.test(msg)
-  ) {
-    return "Server timeout or deploy setup. Redeploy the latest app, run Supabase SQL migrations (license_track + content_hash), set OPENAI_API_KEY on the server, and use a host tier that allows ~2 minute functions.";
-  }
-  if (/Failed to fetch|NetworkError|load failed/i.test(msg)) {
-    return "Network error—check your connection and try again.";
-  }
-  return msg;
-}
 
 export function BbsScanClient() {
   const router = useRouter();

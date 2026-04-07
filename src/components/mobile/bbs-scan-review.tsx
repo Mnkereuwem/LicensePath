@@ -9,6 +9,7 @@ import type {
   BbsScanExtractedEntry,
 } from "@/lib/mobile/bbs-scan-types";
 import { SCAN_LOW_CONFIDENCE_THRESHOLD } from "@/lib/mobile/bbs-scan-types";
+import { describeScanFailure } from "@/lib/mobile/scan-error-message";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -110,14 +111,7 @@ export function BbsScanReview({
         toast.error("Could not save", { description: res.message });
       }
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Unexpected error while saving.";
-      toast.error("Could not save", {
-        description:
-          msg.includes("Failed to fetch") || msg.includes("Network")
-            ? "Network error—check your connection and try again."
-            : msg,
-      });
+      toast.error("Could not save", { description: describeScanFailure(err) });
     } finally {
       setSaving(false);
     }

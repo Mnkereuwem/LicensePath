@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 /** Must cover scan + PDF OCR; nested routes inherit limits on some hosts (scan uses GPT‑4o vision). */
-export const maxDuration = 180;
+export const maxDuration = 300;
 export const runtime = "nodejs";
 
 export default async function DashboardLayout({
