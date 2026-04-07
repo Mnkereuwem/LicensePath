@@ -61,10 +61,11 @@ export function BbsDocumentationClient({
   if (initialItems.length === 0) {
     return (
       <p className="text-muted-foreground border-border rounded-lg border border-dashed px-4 py-8 text-center text-sm">
-        No PDF or photo imports saved yet. Use{" "}
-        <span className="text-foreground font-medium">Log hours</span> (PDF) or{" "}
-        <span className="text-foreground font-medium">Scan log</span> (photo) to
-        add documentation; it will show here and feed your progress bar.
+        No rows match your hour tracker right now—either you have no weekly hours
+        yet, or every hour is from manual entry only. Each PDF or scan you import
+        into the grid adds one row here (1:1 with those uploads). Use{" "}
+        <span className="text-foreground font-medium">Log hours</span> or{" "}
+        <span className="text-foreground font-medium">Scan log</span> to add one.
       </p>
     );
   }
@@ -137,11 +138,9 @@ export function BbsDocumentationClient({
         </tbody>
       </table>
       <p className="text-muted-foreground border-border border-t px-3 py-2 text-xs leading-relaxed">
-        <span className="text-foreground font-medium">Active</span> means this
-        file’s imported lines are in your audit log. The dashboard progress bar
-        uses credited hours (after weekly caps), so the percent may not equal a
-        raw sum of every row. Deleting subtracts this import’s hours from the
-        weekly grid; refresh Dashboard to see the bar update.
+        Each row is tied to the weekly hour tracker: deleting it reverses that
+        import’s contribution to reported totals (and credited totals after
+        caps). Open Dashboard after a delete to refresh the progress bar.
       </p>
     </div>
   );

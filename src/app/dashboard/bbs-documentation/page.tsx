@@ -23,16 +23,12 @@ export default async function BbsDocumentationPage() {
             BBS Documentation
           </h1>
           <p className="text-muted-foreground mt-1 text-sm leading-relaxed sm:text-base">
-            Every PDF import and confirmed photo scan listed here is{" "}
-            <span className="text-foreground font-medium">Active</span>: its
-            lines are stored in your audit log and rolled into{" "}
-            <span className="text-foreground font-medium">weekly totals</span>{" "}
-            that drive the dashboard experience progress bar. Deleting a row
-            removes the file from storage, deletes those log lines, and subtracts
-            the same hours from your grid so totals stay in sync. New imports
-            update the weekly grid before log lines are saved, so this list
-            matches credited progress. If an older import never changed your
-            dashboard, delete it here.
+            <span className="text-foreground font-medium">1:1 rule:</span> one
+            row here per import that is still reflected in your weekly hour grid.
+            If the tracker has no reported hours at all, this page is empty.
+            Manual-only weeks do not create rows. Three active imports → three
+            deletable documents; deleting one removes that file and subtracts its
+            hours. Orphan log lines that do not affect the grid stay hidden.
           </p>
         </div>
       </div>

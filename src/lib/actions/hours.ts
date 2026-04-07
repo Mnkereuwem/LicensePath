@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import { getTrackHourRules } from "@/lib/compliance/track-hour-rules";
 import { normalizeLicenseTrack } from "@/lib/licensing/license-tracks";
-import { startOfWeekMonday } from "@/lib/dates/week";
 import type { HourCategoryKey } from "@/lib/hours/categories";
+import {
+  buildDeltasByWeekFromParsedBbsEntries,
+  validateDeltasMatchEntryTotals,
+} from "@/lib/hours/bbs-weekly-deltas";
 import { emptyHourRecord, HOUR_CATEGORY_KEYS } from "@/lib/hours/categories";
 import type { ParsedBbsEntry } from "@/lib/openai/bbs-ocr";
 import { ensureProfileForUser } from "@/lib/supabase/admin";
@@ -200,48 +203,12 @@ async function mutateWeeklyGridWithBbsEntries(
 
   const rules = getTrackHourRules(normalizeLicenseTrack(profile?.license_track));
 
-  const deltasByWeek = new Map<string, Record<HourCategoryKey, number>>();
-  for (const e of entries) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) continue;
-    const weekStart = startOfWeekMonday(new Date(`${e.date}T12:00:00`));
-    if (!deltasByWeek.has(weekStart)) {
-      deltasByWeek.set(weekStart, emptyHourRecord());
-    }
-    const d = deltasByWeek.get(weekStart)!;
-    d.individual_supervision += e.individual_supervision_hours;
-    d.group_supervision += e.group_supervision_hours;
-    d.direct_clinical += e.clinical_hours;
-  }
-
-  for (const [, delta] of deltasByWeek) {
-    for (const k of HOUR_CATEGORY_KEYS) {
-      delta[k] = Math.round(delta[k] * 100) / 100;
-    }
-  }
+  const deltasByWeek = buildDeltasByWeekFromParsedBbsEntries(entries);
 
   const label = sign === 1 ? "Imported" : "Removal";
-  for (const [weekStart, delta] of deltasByWeek) {
-    const sumRow = emptyHourRecord();
-    for (const e of entries) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) continue;
-      const ws = startOfWeekMonday(new Date(`${e.date}T12:00:00`));
-      if (ws !== weekStart) continue;
-      sumRow.individual_supervision += e.individual_supervision_hours;
-      sumRow.group_supervision += e.group_supervision_hours;
-      sumRow.direct_clinical += e.clinical_hours;
-    }
-    for (const k of HOUR_CATEGORY_KEYS) {
-      sumRow[k] = Math.round(sumRow[k] * 100) / 100;
-    }
-    const TOL = 0.02;
-    for (const k of HOUR_CATEGORY_KEYS) {
-      if (Math.abs(sumRow[k] - delta[k]) > TOL) {
-        return {
-          ok: false,
-          message: `${label} rows for week starting ${weekStart} do not add up (${k}: ${sumRow[k]} vs ${delta[k]}). Nothing was changed.`,
-        };
-      }
-    }
+  const consistency = validateDeltasMatchEntryTotals(entries, deltasByWeek, label);
+  if (!consistency.ok) {
+    return { ok: false, message: consistency.message };
   }
 
   const weeksTouched: string[] = [];

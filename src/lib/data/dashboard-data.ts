@@ -11,6 +11,13 @@ import {
 } from "@/lib/licensing/license-tracks";
 import { startOfWeekMonday } from "@/lib/dates/week";
 import type { HourCategoryKey } from "@/lib/hours/categories";
+import {
+  buildDeltasByWeekFromParsedBbsEntries,
+  mergeWeeklyEntryRowsToMap,
+  reportedGridWouldChangeIfSubtracting,
+  validateDeltasMatchEntryTotals,
+} from "@/lib/hours/bbs-weekly-deltas";
+import type { ParsedBbsEntry } from "@/lib/openai/bbs-ocr";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function describeSupabaseError(err: {
@@ -326,7 +333,11 @@ export type BbsDocumentationListItem = {
   firstImportedAt: string;
 };
 
-/** Grouped imports from `hours_logs` (PDF + photo scan saves). Each row is one saved upload; hours should match weekly grid after successful import (grid is applied before insert on new code paths). */
+/**
+ * One listed document per import that still moves the **hour tracker** (reported
+ * weekly grid). Empty tracker → empty list. Orphan `hours_logs` rows (not in grid)
+ * are hidden so count stays 1:1 with deletable sources that match progress.
+ */
 export async function fetchBbsDocumentationList(): Promise<
   BbsDocumentationListItem[]
 > {
@@ -336,49 +347,121 @@ export async function fetchBbsDocumentationList(): Promise<
   } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data, error } = await supabase
+  const { data: weekRows } = await supabase
+    .from("weekly_hour_entries")
+    .select("week_start, category, hours, credited_hours")
+    .eq("supervisee_id", user.id);
+
+  let totalReported = 0;
+  let totalCredited = 0;
+  const mergeInput: { week_start: string; category: string; hours: unknown }[] =
+    [];
+  for (const r of weekRows ?? []) {
+    totalReported += Number(r.hours) || 0;
+    totalCredited += Number(r.credited_hours) || 0;
+    mergeInput.push({
+      week_start: r.week_start as string,
+      category: r.category as string,
+      hours: r.hours,
+    });
+  }
+
+  if (totalReported <= 0 && totalCredited <= 0) {
+    return [];
+  }
+
+  const weekToReported = mergeWeeklyEntryRowsToMap(mergeInput);
+
+  const { data: logData, error: logErr } = await supabase
     .from("hours_logs")
     .select(
-      "source_storage_path, created_at, clinical_hours, individual_supervision_hours, group_supervision_hours",
+      "source_storage_path, created_at, work_date, clinical_hours, individual_supervision_hours, group_supervision_hours, site_name",
     )
     .eq("supervisee_id", user.id)
     .not("source_storage_path", "is", null);
 
-  if (error || !data?.length) return [];
+  if (logErr || !logData?.length) return [];
 
-  const byPath = new Map<
-    string,
-    { count: number; minAt: string; hourSum: number }
-  >();
-  for (const row of data) {
+  type Agg = {
+    entries: ParsedBbsEntry[];
+    count: number;
+    minAt: string;
+  };
+  const byPath = new Map<string, Agg>();
+
+  for (const row of logData) {
     const p = row.source_storage_path as string | null;
     if (!p) continue;
     const path = p.trim();
     if (!path) continue;
 
-    const hr =
-      (Number(row.clinical_hours) || 0) +
-      (Number(row.individual_supervision_hours) || 0) +
-      (Number(row.group_supervision_hours) || 0);
+    const wdRaw = row.work_date as string;
+    const date =
+      typeof wdRaw === "string"
+        ? wdRaw.slice(0, 10)
+        : String(wdRaw ?? "").slice(0, 10);
+
+    const entry: ParsedBbsEntry = {
+      date,
+      clinical_hours: Number(row.clinical_hours) || 0,
+      individual_supervision_hours: Number(row.individual_supervision_hours) || 0,
+      group_supervision_hours: Number(row.group_supervision_hours) || 0,
+      site_name:
+        typeof row.site_name === "string" && row.site_name.length > 0
+          ? row.site_name
+          : null,
+    };
+
     const ca = String(row.created_at ?? "");
     const cur = byPath.get(path);
     if (!cur) {
-      byPath.set(path, { count: 1, minAt: ca, hourSum: hr });
+      byPath.set(path, { entries: [entry], count: 1, minAt: ca });
     } else {
+      cur.entries.push(entry);
       cur.count += 1;
-      cur.hourSum += hr;
       if (ca && ca < cur.minAt) cur.minAt = ca;
     }
   }
 
-  return Array.from(byPath.entries())
-    .filter(([, v]) => v.hourSum > 0)
-    .map(([storagePath, { count, minAt }]) => ({
+  const out: BbsDocumentationListItem[] = [];
+
+  for (const [storagePath, agg] of byPath) {
+    const hrSum = agg.entries.reduce(
+      (s, e) =>
+        s +
+        e.clinical_hours +
+        e.individual_supervision_hours +
+        e.group_supervision_hours,
+      0,
+    );
+    if (hrSum <= 0) continue;
+
+    const deltas = buildDeltasByWeekFromParsedBbsEntries(agg.entries);
+    if (deltas.size === 0) continue;
+
+    const consistent = validateDeltasMatchEntryTotals(
+      agg.entries,
+      deltas,
+      "Log",
+    );
+    if (!consistent.ok) continue;
+
+    if (
+      !reportedGridWouldChangeIfSubtracting(weekToReported, deltas)
+    ) {
+      continue;
+    }
+
+    out.push({
       storagePath,
       displayName: storagePath.split("/").pop() ?? storagePath,
-      lineCount: count,
-      sourceKind: /\.pdf$/i.test(storagePath) ? ("pdf" as const) : ("photo" as const),
-      firstImportedAt: minAt,
-    }))
-    .sort((a, b) => (a.firstImportedAt < b.firstImportedAt ? 1 : -1));
+      lineCount: agg.count,
+      sourceKind: /\.pdf$/i.test(storagePath) ? "pdf" : "photo",
+      firstImportedAt: agg.minAt,
+    });
+  }
+
+  return out.sort((a, b) =>
+    a.firstImportedAt < b.firstImportedAt ? 1 : -1,
+  );
 }
