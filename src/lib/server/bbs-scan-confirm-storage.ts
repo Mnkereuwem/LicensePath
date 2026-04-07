@@ -111,8 +111,8 @@ export async function confirmBbsScanAndSaveCore(input: {
   const parsedForGrid: ParsedBbsEntry[] = input.rows.map((r) => ({
     date: r.work_date,
     clinical_hours: Math.max(0, r.direct_clinical_counseling_hours),
-    individual_supervision_hours: 0,
-    group_supervision_hours: Math.max(0, r.non_clinical_supervision_hours),
+    individual_supervision_hours: Math.max(0, r.individual_supervision_hours),
+    group_supervision_hours: Math.max(0, r.group_supervision_hours),
     site_name: r.supervised_site_name,
   }));
 
@@ -132,8 +132,8 @@ export async function confirmBbsScanAndSaveCore(input: {
     supervisee_id: user.id,
     work_date: r.work_date,
     site_name: r.supervised_site_name,
-    individual_supervision_hours: 0,
-    group_supervision_hours: Math.max(0, r.non_clinical_supervision_hours),
+    individual_supervision_hours: Math.max(0, r.individual_supervision_hours),
+    group_supervision_hours: Math.max(0, r.group_supervision_hours),
     clinical_hours: Math.max(0, r.direct_clinical_counseling_hours),
     source_storage_path: input.storagePath,
     source_content_hash: input.contentHash,

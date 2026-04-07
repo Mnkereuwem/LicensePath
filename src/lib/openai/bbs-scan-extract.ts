@@ -46,29 +46,57 @@ function ymd(y: number, month: number, day: number): string | null {
   return `${y}-${pad2(month)}-${pad2(day)}`;
 }
 
-/** Normalize model output to YYYY-MM-DD; default missing year to DEFAULT_EXPERIENCE_YEAR. */
-function normalizeScanDate(raw: string): string | null {
+type DateNormOptions = { defaultYear: number; preferMDY: boolean };
+
+/** Normalize model output to YYYY-MM-DD. US worksheets default to month-first when ambiguous. */
+function normalizeScanDate(raw: string, opts: DateNormOptions): string | null {
   const s = raw.trim();
+  const { defaultYear, preferMDY } = opts;
+
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) return ymd(Number(m[1]), Number(m[2]), Number(m[3]));
 
+  /* MM/DD/YYYY or DD/MM/YYYY — disambiguate with part > 12 */
   m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
-  if (m) return ymd(Number(m[3]), Number(m[1]), Number(m[2]));
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    const y = Number(m[3]);
+    if (a > 12) return ymd(y, b, a); /* day first */
+    if (b > 12) return ymd(y, a, b); /* month first */
+    if (preferMDY) return ymd(y, a, b);
+    return ymd(y, b, a);
+  }
 
   m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})$/);
   if (m) {
     let y = Number(m[3]);
     y += y >= 70 ? 1900 : 2000;
-    return ymd(y, Number(m[1]), Number(m[2]));
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (a > 12) return ymd(y, b, a);
+    if (b > 12) return ymd(y, a, b);
+    if (preferMDY) return ymd(y, a, b);
+    return ymd(y, b, a);
   }
 
-  /* MM/DD without year */
   m = s.match(/^(\d{1,2})[/.-](\d{1,2})$/);
   if (m) {
-    return ymd(DEFAULT_EXPERIENCE_YEAR, Number(m[1]), Number(m[2]));
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (a > 12) return ymd(defaultYear, b, a);
+    if (b > 12) return ymd(defaultYear, a, b);
+    if (preferMDY) return ymd(defaultYear, a, b);
+    return ymd(defaultYear, b, a);
   }
 
   return null;
+}
+
+function numField(v: unknown): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function clampHours(n: number): number {
@@ -91,6 +119,11 @@ export async function extractBbsRowsFromScanImage(input: {
     track,
     defaultExperienceYear: DEFAULT_EXPERIENCE_YEAR,
   });
+  const dateOpts: DateNormOptions = {
+    defaultYear: DEFAULT_EXPERIENCE_YEAR,
+    /* All current license tracks are US boards — month/day ambiguity resolves as MM/DD. */
+    preferMDY: true,
+  };
   const openai = new OpenAI({
     apiKey: requireOpenAiKey(),
     timeout: VISION_TIMEOUT_MS,
@@ -109,11 +142,11 @@ export async function extractBbsRowsFromScanImage(input: {
         content: [
           {
             type: "text",
-            text: "Extract all readable day/week rows from this hour log photo into the JSON schema.",
+            text: "Read each dated row or day-column carefully. Separate direct clinical (client-facing) hours from individual vs group supervision. Output the JSON schema; dates must match the form’s calendar day for each cell.",
           },
           {
             type: "image_url",
-            image_url: { url: dataUrl, detail: "low" },
+            image_url: { url: dataUrl, detail: "high" },
           },
         ],
       },
@@ -128,6 +161,8 @@ export async function extractBbsRowsFromScanImage(input: {
     entries?: Array<{
       work_date?: string;
       direct_clinical_counseling_hours?: unknown;
+      individual_supervision_hours?: unknown;
+      group_supervision_hours?: unknown;
       non_clinical_supervision_hours?: unknown;
       supervised_site_name?: unknown;
       confidence?: Partial<Record<string, number>>;
@@ -146,25 +181,24 @@ export async function extractBbsRowsFromScanImage(input: {
   for (const row of parsed.entries) {
     if (out.length >= 15) break;
     if (!row || typeof row.work_date !== "string") continue;
-    const workDate = normalizeScanDate(row.work_date);
+    const workDate = normalizeScanDate(row.work_date, dateOpts);
     if (!workDate) continue;
 
-    let clinical = clampHours(
-      typeof row.direct_clinical_counseling_hours === "number"
-        ? row.direct_clinical_counseling_hours
-        : Number(row.direct_clinical_counseling_hours),
-    );
+    let clinical = clampHours(numField(row.direct_clinical_counseling_hours));
     let clinicalCapped = false;
     if (clinical > trackRules.dailyClinicalHoursMax) {
       clinicalCapped = true;
       clinical = trackRules.dailyClinicalHoursMax;
     }
 
-    const supervision = clampHours(
-      typeof row.non_clinical_supervision_hours === "number"
-        ? row.non_clinical_supervision_hours
-        : Number(row.non_clinical_supervision_hours),
-    );
+    let indSup = clampHours(numField(row.individual_supervision_hours));
+    let grpSup = clampHours(numField(row.group_supervision_hours));
+    if (indSup === 0 && grpSup === 0 && row.non_clinical_supervision_hours !== undefined) {
+      const legacy = clampHours(numField(row.non_clinical_supervision_hours));
+      if (legacy > 0) {
+        indSup = legacy;
+      }
+    }
 
     const siteName =
       typeof row.supervised_site_name === "string" &&
@@ -173,17 +207,20 @@ export async function extractBbsRowsFromScanImage(input: {
         : null;
 
     const c = row.confidence ?? {};
+    const legSup = c.supervision;
     const confidence: BbsScanFieldConfidence = {
       date: clamp01(c.date),
       clinical: clamp01(c.clinical),
-      supervision: clamp01(c.supervision),
+      supervision_individual: clamp01(c.supervision_individual ?? legSup),
+      supervision_group: clamp01(c.supervision_group ?? legSup),
       site: clamp01(c.site),
     };
 
     out.push({
       work_date: workDate,
       direct_clinical_counseling_hours: clinical,
-      non_clinical_supervision_hours: supervision,
+      individual_supervision_hours: indSup,
+      group_supervision_hours: grpSup,
       supervised_site_name: siteName,
       confidence,
       clinical_capped: clinicalCapped,

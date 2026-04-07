@@ -50,7 +50,8 @@ export function BbsScanReview({
       extracted.map((e) => ({
         work_date: e.work_date,
         direct_clinical_counseling_hours: e.direct_clinical_counseling_hours,
-        non_clinical_supervision_hours: e.non_clinical_supervision_hours,
+        individual_supervision_hours: e.individual_supervision_hours,
+        group_supervision_hours: e.group_supervision_hours,
         supervised_site_name: e.supervised_site_name,
       })),
     [extracted],
@@ -61,14 +62,17 @@ export function BbsScanReview({
 
   const totals = useMemo(() => {
     let clinical = 0;
-    let supervision = 0;
+    let indSup = 0;
+    let grpSup = 0;
     for (const r of rows) {
       clinical += Math.max(0, r.direct_clinical_counseling_hours);
-      supervision += Math.max(0, r.non_clinical_supervision_hours);
+      indSup += Math.max(0, r.individual_supervision_hours);
+      grpSup += Math.max(0, r.group_supervision_hours);
     }
     return {
       clinical: Math.round(clinical * 100) / 100,
-      supervision: Math.round(supervision * 100) / 100,
+      indSup: Math.round(indSup * 100) / 100,
+      grpSup: Math.round(grpSup * 100) / 100,
     };
   }, [rows]);
 
@@ -137,7 +141,8 @@ export function BbsScanReview({
               <tr className="bg-muted/50 border-border/60 border-b">
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 text-right font-medium">Clinical (h)</th>
-                <th className="px-3 py-2 text-right font-medium">Supervision (h)</th>
+                <th className="px-3 py-2 text-right font-medium">Indiv. sup (h)</th>
+                <th className="px-3 py-2 text-right font-medium">Group sup (h)</th>
               </tr>
             </thead>
             <tbody>
@@ -153,7 +158,10 @@ export function BbsScanReview({
                     {Math.round(r.direct_clinical_counseling_hours * 100) / 100}
                   </td>
                   <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">
-                    {Math.round(r.non_clinical_supervision_hours * 100) / 100}
+                    {Math.round(r.individual_supervision_hours * 100) / 100}
+                  </td>
+                  <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">
+                    {Math.round(r.group_supervision_hours * 100) / 100}
                   </td>
                 </tr>
               ))}
@@ -166,8 +174,12 @@ export function BbsScanReview({
             {totals.clinical}h
           </span>
           <span>
-            <span className="text-foreground font-medium">Σ Supervision:</span>{" "}
-            {totals.supervision}h
+            <span className="text-foreground font-medium">Σ Indiv. sup:</span>{" "}
+            {totals.indSup}h
+          </span>
+          <span>
+            <span className="text-foreground font-medium">Σ Group sup:</span>{" "}
+            {totals.grpSup}h
           </span>
           <span>
             <span className="text-foreground font-medium">Rows:</span>{" "}
@@ -236,18 +248,37 @@ export function BbsScanReview({
                 />
               </Field>
               <Field
-                className={cn("gap-1.5", lowClass(ex.confidence.supervision))}
+                className={cn(
+                  "gap-1.5",
+                  lowClass(ex.confidence.supervision_individual),
+                )}
               >
                 <FieldLabel className="text-sm">
-                  Non-clinical / supervision (hrs)
+                  Individual / triadic supervision (hrs)
                 </FieldLabel>
                 <Input
                   className="min-h-11 text-base"
                   inputMode="decimal"
-                  value={String(rows[i]?.non_clinical_supervision_hours ?? 0)}
+                  value={String(rows[i]?.individual_supervision_hours ?? 0)}
                   onChange={(e) =>
                     updateRow(i, {
-                      non_clinical_supervision_hours:
+                      individual_supervision_hours:
+                        Number.parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </Field>
+              <Field
+                className={cn("gap-1.5", lowClass(ex.confidence.supervision_group))}
+              >
+                <FieldLabel className="text-sm">Group supervision (hrs)</FieldLabel>
+                <Input
+                  className="min-h-11 text-base"
+                  inputMode="decimal"
+                  value={String(rows[i]?.group_supervision_hours ?? 0)}
+                  onChange={(e) =>
+                    updateRow(i, {
+                      group_supervision_hours:
                         Number.parseFloat(e.target.value) || 0,
                     })
                   }

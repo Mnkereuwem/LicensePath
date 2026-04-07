@@ -109,16 +109,23 @@ export function buildScanVisionSystemPrompt(params: {
   const ctx = buildScanVisionBoardContext(params.track);
   return `${ctx}
 
-You are reading a photograph of a handwritten or printed hour log. Extract data into JSON only (no markdown) with key "entries": array (max 15). Each entry:
-- "work_date": string — calendar date for that row/column. Prefer YYYY-MM-DD. If the year is missing on the form, use ${params.defaultExperienceYear}.
-- "direct_clinical_counseling_hours": number — all direct client-facing / clinical practice / counseling contact hours for that date that are NOT supervision training (use 0 if blank).
-- "non_clinical_supervision_hours": number — individual, triadic, and group supervision hours for that date combined; include other non-clinical supervision blocks labeled as supervision. If the form separates individual vs group, sum them here. Use 0 if blank.
-- "supervised_site_name": string or null — employer / program / site if visible.
-- "confidence": object with numbers 0–1 for: "date", "clinical", "supervision", "site".
+You are reading a photograph of a handwritten or printed supervision / experience hour log (often a weekly grid: days as rows or columns).
+
+Output JSON only (no markdown) with key "entries": array (max 15). One entry per calendar date that has any hours or a clearly labeled day in a dated row/column.
+
+Each entry MUST include:
+- "work_date": string — the service date for that cell in YYYY-MM-DD. If the form shows only month/day, use year ${params.defaultExperienceYear}. For US-style BBS worksheets (month before day when ambiguous), interpret "3/5" as March 5 unless the form explicitly uses day-first. If a "Week of Monday MM/DD/YY" header applies, assign each daily column that week’s calendar date (Mon–Fri).
+- "direct_clinical_counseling_hours": number — hours in the direct client / clinical counseling / psychotherapy / “client contact” columns ONLY. Do NOT add supervision hours here. Use 0 if blank or dash.
+- "individual_supervision_hours": number — one-to-one, individual, or triadic supervision (sometimes labeled A, individual, 1:1). Use 0 if blank.
+- "group_supervision_hours": number — group supervision only. Use 0 if blank.
+- "supervised_site_name": string or null — site/agency/program if visible that day.
+- "confidence": object with numbers 0–1 for: "date", "clinical", "supervision_individual", "supervision_group", "site".
 
 Rules:
-- Numbers only for hours; decimals allowed.
-- Do not invent dates: omit entries you cannot date.
+- Never sum individual and group into one number — keep them separate.
+- If the form has a single “supervision” column with no split, put the whole value in "individual_supervision_hours" and 0 in group unless the row label says “group”.
+- Hours are numeric decimals; blank/dash → 0.
+- Do not invent dates; skip illegible rows.
 - If nothing is legible return {"entries": []}.`;
 }
 

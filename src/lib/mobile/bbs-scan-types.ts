@@ -13,14 +13,19 @@ export const SCAN_LOW_CONFIDENCE_THRESHOLD = 0.72;
 export type BbsScanFieldConfidence = {
   date: number;
   clinical: number;
-  supervision: number;
+  supervision_individual: number;
+  supervision_group: number;
   site: number;
 };
 
 export type BbsScanExtractedEntry = {
   work_date: string;
+  /** Direct client / clinical counseling contact for the date (not supervision). */
   direct_clinical_counseling_hours: number;
-  non_clinical_supervision_hours: number;
+  /** One-to-one, triadic, or “individual” supervision line(s) for that date. */
+  individual_supervision_hours: number;
+  /** Group supervision only for that date. */
+  group_supervision_hours: number;
   supervised_site_name: string | null;
   confidence: BbsScanFieldConfidence;
   clinical_capped: boolean;
@@ -29,6 +34,7 @@ export type BbsScanExtractedEntry = {
 export type BbsScanConfirmRowInput = {
   work_date: string;
   direct_clinical_counseling_hours: number;
-  non_clinical_supervision_hours: number;
+  individual_supervision_hours: number;
+  group_supervision_hours: number;
   supervised_site_name: string | null;
 };
