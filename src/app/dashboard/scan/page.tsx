@@ -1,6 +1,7 @@
 import { BbsScanClient } from "@/app/dashboard/scan/bbs-scan-client";
 
-export const maxDuration = 60;
+/* GPT-4o vision can exceed 60s on large images; keep users under one warm request */
+export const maxDuration = 180;
 export const runtime = "nodejs";
 
 export default function BbsScanPage() {

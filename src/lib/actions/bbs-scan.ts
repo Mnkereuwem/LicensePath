@@ -102,8 +102,15 @@ export async function extractBbsScanFromStorage(
   try {
     entries = await extractBbsRowsFromScanImage({ base64, mimeType: mime });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Vision extraction failed.";
-    return { ok: false, message: msg };
+    const raw = e instanceof Error ? e.message : "Vision extraction failed.";
+    if (/timeout|timed out|ETIMEDOUT|aborted/i.test(raw)) {
+      return {
+        ok: false,
+        message:
+          "Reading the photo timed out. Try a smaller or clearer image, or check your connection.",
+      };
+    }
+    return { ok: false, message: raw };
   }
 
   const { data: signed, error: signErr } = await supabase.storage

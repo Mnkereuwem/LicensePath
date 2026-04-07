@@ -87,11 +87,17 @@ Rules:
 - Do not invent dates: if a date cannot be read, omit that entry.
 - If nothing is legible return {"entries": []}.`;
 
+const VISION_TIMEOUT_MS = 90_000;
+
 export async function extractBbsRowsFromScanImage(input: {
   base64: string;
   mimeType: "image/jpeg" | "image/png" | "image/webp";
 }): Promise<BbsScanExtractedEntry[]> {
-  const openai = new OpenAI({ apiKey: requireOpenAiKey() });
+  const openai = new OpenAI({
+    apiKey: requireOpenAiKey(),
+    timeout: VISION_TIMEOUT_MS,
+    maxRetries: 0,
+  });
   const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
 
   const completion = await openai.chat.completions.create({
@@ -111,6 +117,7 @@ export async function extractBbsRowsFromScanImage(input: {
         ],
       },
     ],
+    max_tokens: 4096,
   });
 
   const content = completion.choices[0]?.message?.content;

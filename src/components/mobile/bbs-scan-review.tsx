@@ -102,13 +102,22 @@ export function BbsScanReview({
         fileNameHint: storagePath.split("/").pop(),
       });
       if (res.ok) {
-        toast.success("Saved to your log", {
-          description: `${res.inserted} row(s); weekly totals updated for ${res.weeksUpdated.join(", ") || "—"}.`,
+        toast.success("Hours added to your progress", {
+          description: `${res.inserted} row(s); weeks updated: ${res.weeksUpdated.join(", ") || "—"}.`,
         });
         onDone();
       } else {
         toast.error("Could not save", { description: res.message });
       }
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Unexpected error while saving.";
+      toast.error("Could not save", {
+        description:
+          msg.includes("Failed to fetch") || msg.includes("Network")
+            ? "Network error—check your connection and try again."
+            : msg,
+      });
     } finally {
       setSaving(false);
     }
@@ -117,13 +126,46 @@ export function BbsScanReview({
   return (
     <Card className="border-border/80 overflow-hidden shadow-lg">
       <CardHeader className="pb-2">
-        <CardTitle className="text-xl">Review scan</CardTitle>
+        <CardTitle className="text-xl">Preview captured hours</CardTitle>
         <CardDescription>
-          Check values before saving. Amber highlights mean the model was less
-          sure—edit if needed. Nothing is written to{" "}
-          <span className="text-foreground font-medium">hours_logs</span> until
-          you confirm.
+          Here is what we read from your photo. Adjust any cell if needed, then
+          tap <span className="text-foreground font-medium">Add to my hours</span>{" "}
+          to save into your weekly progress and log. Nothing is stored until you
+          tap that button.
         </CardDescription>
+        <div
+          className="border-border/60 bg-card overflow-hidden rounded-xl border"
+          role="region"
+          aria-label="Captured hours summary"
+        >
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-muted/50 border-border/60 border-b">
+                <th className="px-3 py-2 font-medium">Date</th>
+                <th className="px-3 py-2 text-right font-medium">Clinical (h)</th>
+                <th className="px-3 py-2 text-right font-medium">Supervision (h)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr
+                  key={`${r.work_date}-${i}`}
+                  className="border-border/40 border-b last:border-b-0"
+                >
+                  <td className="text-foreground px-3 py-2 font-medium tabular-nums">
+                    {r.work_date || "—"}
+                  </td>
+                  <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">
+                    {Math.round(r.direct_clinical_counseling_hours * 100) / 100}
+                  </td>
+                  <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">
+                    {Math.round(r.non_clinical_supervision_hours * 100) / 100}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="text-muted-foreground border-border/60 bg-muted/40 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-sm">
           <span>
             <span className="text-foreground font-medium">Σ Clinical:</span>{" "}
@@ -158,9 +200,12 @@ export function BbsScanReview({
         </div>
         <div className="flex flex-col gap-4">
           {extracted.map((ex, i) => (
-            <FieldGroup key={`${ex.work_date}-${i}`} className="gap-3 rounded-lg border p-4">
+            <FieldGroup
+              key={`${ex.work_date}-${i}`}
+              className="gap-3 rounded-lg border p-4"
+            >
               <p className="text-muted-foreground text-xs font-medium">
-                Row {i + 1}
+                Edit row {i + 1}
                 {ex.clinical_capped && (
                   <span className="text-amber-600 ml-2">
                     (Clinical hours capped to daily guardrail)
@@ -253,10 +298,10 @@ export function BbsScanReview({
           {saving ? (
             <>
               <Loader2 className="size-4 shrink-0 animate-spin" />
-              Saving…
+              Adding to your hours…
             </>
           ) : (
-            "Confirm and save"
+            "Add to my hours"
           )}
         </Button>
       </CardFooter>
