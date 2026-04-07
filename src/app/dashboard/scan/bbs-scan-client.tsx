@@ -12,8 +12,8 @@ import { Camera, ImageIcon, Loader2, ScanLine, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { BbsScanReview } from "@/components/mobile/bbs-scan-review";
-import { DUPLICATE_SCAN_DOCUMENT_CODE } from "@/lib/actions/bbs-scan";
 import { extractBbsScanFromStorageRequest } from "@/lib/mobile/bbs-scan-extract-client";
+import { DUPLICATE_SCAN_DOCUMENT_CODE } from "@/lib/mobile/bbs-scan-types";
 import {
   captureAndUploadBbsScan,
   isNativeBbsScanCamera,

@@ -1,5 +1,8 @@
 /** Shared types/constants for mobile BBS scan (safe for client + server). */
 
+/** Duplicate-image flow from scan extract; keep here — not in `"use server"` files (avoids stale action IDs on the client). */
+export const DUPLICATE_SCAN_DOCUMENT_CODE = "duplicate_document" as const;
+
 export const BBS_UPLOADS_BUCKET = "bbs-uploads";
 
 /** PDF weekly logs uploaded from Log hours. */

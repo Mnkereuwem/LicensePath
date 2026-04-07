@@ -1,14 +1,13 @@
 import { countHoursLogsByContentHash } from "@/lib/hours/hours-log-content-hash";
 import {
   BBS_UPLOADS_BUCKET,
+  DUPLICATE_SCAN_DOCUMENT_CODE,
   type BbsScanExtractedEntry,
 } from "@/lib/mobile/bbs-scan-types";
 import { normalizeLicenseTrack } from "@/lib/licensing/license-tracks";
 import { extractBbsRowsFromScanImage } from "@/lib/openai/bbs-scan-extract";
 import { sha256HexBuffer } from "@/lib/server/sha256-buffer";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-export const DUPLICATE_SCAN_DOCUMENT_CODE = "duplicate_document" as const;
 
 export type ExtractBbsScanResult =
   | {

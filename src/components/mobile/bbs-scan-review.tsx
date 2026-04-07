@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 
-import { confirmBbsScanAndSave } from "@/lib/actions/bbs-scan";
+import { confirmBbsScanRequest } from "@/lib/mobile/bbs-scan-extract-client";
 import type {
   BbsScanConfirmRowInput,
   BbsScanExtractedEntry,
@@ -96,7 +96,7 @@ export function BbsScanReview({
   async function onConfirm() {
     setSaving(true);
     try {
-      const res = await confirmBbsScanAndSave({
+      const res = await confirmBbsScanRequest({
         storagePath,
         contentHash,
         rows,
