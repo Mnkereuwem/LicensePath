@@ -138,9 +138,10 @@ export function BbsDocumentationClient({
       </table>
       <p className="text-muted-foreground border-border border-t px-3 py-2 text-xs leading-relaxed">
         <span className="text-foreground font-medium">Active</span> means this
-        file’s imported lines are in your log and included in dashboard credited
-        totals. Deleting subtracts those hours from the weekly grid and updates
-        the progress bar (no full page reload needed).
+        file’s imported lines are in your audit log. The dashboard progress bar
+        uses credited hours (after weekly caps), so the percent may not equal a
+        raw sum of every row. Deleting subtracts this import’s hours from the
+        weekly grid; refresh Dashboard to see the bar update.
       </p>
     </div>
   );

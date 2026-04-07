@@ -1,6 +1,9 @@
 import { revalidatePath } from "next/cache";
 
-import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
+import {
+  addParsedBbsEntriesToWeeklyGrid,
+  subtractParsedBbsEntriesFromWeeklyGrid,
+} from "@/lib/actions/hours";
 import { getTrackHourRules } from "@/lib/compliance/track-hour-rules";
 import {
   BBS_UPLOADS_BUCKET,
@@ -140,27 +143,27 @@ export async function confirmBbsScanAndSaveCore(input: {
     ocr_raw: i === 0 ? ocrRawFirst : null,
   }));
 
-  const { error: insErr } = await supabase.from("hours_logs").insert(dbRows);
-  if (insErr) {
-    return {
-      ok: false,
-      message: insErr.message.includes("source_content_hash")
-        ? `${insErr.message} Apply migration supabase/migrations/20260416120000_hours_logs_content_hash.sql (or npm run db:content-hash).`
-        : insErr.message,
-    };
-  }
-
   const grid = await addParsedBbsEntriesToWeeklyGrid(parsedForGrid);
   if (!grid.ok) {
+    return { ok: false, message: grid.message };
+  }
+
+  const { error: insErr } = await supabase.from("hours_logs").insert(dbRows);
+  if (insErr) {
+    const rollback = await subtractParsedBbsEntriesFromWeeklyGrid(parsedForGrid);
+    const rollbackNote = rollback.ok
+      ? ""
+      : ` Weekly totals may need manual check (${rollback.message}).`;
     return {
       ok: false,
-      message: `${grid.message} (Rows may be in hours_logs without weekly grid updates.)`,
+      message: `${insErr.message.includes("source_content_hash") ? `${insErr.message} Apply migration supabase/migrations/20260416120000_hours_logs_content_hash.sql (or npm run db:content-hash).` : insErr.message}${rollbackNote}`,
     };
   }
 
   revalidatePath("/dashboard/hours");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/scan");
+  revalidatePath("/dashboard/bbs-documentation");
 
   return {
     ok: true,

@@ -29,7 +29,10 @@ export default async function BbsDocumentationPage() {
             <span className="text-foreground font-medium">weekly totals</span>{" "}
             that drive the dashboard experience progress bar. Deleting a row
             removes the file from storage, deletes those log lines, and subtracts
-            the same hours from your grid so totals stay in sync.
+            the same hours from your grid so totals stay in sync. New imports
+            update the weekly grid before log lines are saved, so this list
+            matches credited progress. If an older import never changed your
+            dashboard, delete it here.
           </p>
         </div>
       </div>

@@ -326,7 +326,7 @@ export type BbsDocumentationListItem = {
   firstImportedAt: string;
 };
 
-/** Grouped imports from `hours_logs` (PDF + photo scan saves). Each row is one active upload contributing to the progress bar. */
+/** Grouped imports from `hours_logs` (PDF + photo scan saves). Each row is one saved upload; hours should match weekly grid after successful import (grid is applied before insert on new code paths). */
 export async function fetchBbsDocumentationList(): Promise<
   BbsDocumentationListItem[]
 > {
@@ -338,27 +338,41 @@ export async function fetchBbsDocumentationList(): Promise<
 
   const { data, error } = await supabase
     .from("hours_logs")
-    .select("source_storage_path, created_at")
+    .select(
+      "source_storage_path, created_at, clinical_hours, individual_supervision_hours, group_supervision_hours",
+    )
     .eq("supervisee_id", user.id)
     .not("source_storage_path", "is", null);
 
   if (error || !data?.length) return [];
 
-  const byPath = new Map<string, { count: number; minAt: string }>();
+  const byPath = new Map<
+    string,
+    { count: number; minAt: string; hourSum: number }
+  >();
   for (const row of data) {
     const p = row.source_storage_path as string | null;
     if (!p) continue;
+    const path = p.trim();
+    if (!path) continue;
+
+    const hr =
+      (Number(row.clinical_hours) || 0) +
+      (Number(row.individual_supervision_hours) || 0) +
+      (Number(row.group_supervision_hours) || 0);
     const ca = String(row.created_at ?? "");
-    const cur = byPath.get(p);
+    const cur = byPath.get(path);
     if (!cur) {
-      byPath.set(p, { count: 1, minAt: ca });
+      byPath.set(path, { count: 1, minAt: ca, hourSum: hr });
     } else {
       cur.count += 1;
+      cur.hourSum += hr;
       if (ca && ca < cur.minAt) cur.minAt = ca;
     }
   }
 
   return Array.from(byPath.entries())
+    .filter(([, v]) => v.hourSum > 0)
     .map(([storagePath, { count, minAt }]) => ({
       storagePath,
       displayName: storagePath.split("/").pop() ?? storagePath,

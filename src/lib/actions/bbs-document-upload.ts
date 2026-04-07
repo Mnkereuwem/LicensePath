@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 
-import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
+import {
+  addParsedBbsEntriesToWeeklyGrid,
+  subtractParsedBbsEntriesFromWeeklyGrid,
+} from "@/lib/actions/hours";
 import { countHoursLogsByContentHash } from "@/lib/hours/hours-log-content-hash";
 import {
   extractBbsEntriesFromPdfBuffer,
@@ -192,27 +195,30 @@ export async function uploadBbsDocumentAndExtract(
     ocr_raw: i === 0 ? ocrRawFirst : null,
   }));
 
+  /* Apply weekly grid first so failed saves never leave hours_logs without matching progress. */
+  const grid = await addParsedBbsEntriesToWeeklyGrid(entries);
+  if (!grid.ok) {
+    await supabase.storage.from(BBS_DOCUMENTS_BUCKET).remove([storagePath]);
+    return { ok: false, message: grid.message };
+  }
+
   const { error: insErr } = await supabase.from("hours_logs").insert(rows);
 
   if (insErr) {
+    const rollback = await subtractParsedBbsEntriesFromWeeklyGrid(entries);
+    await supabase.storage.from(BBS_DOCUMENTS_BUCKET).remove([storagePath]);
+    const rollbackNote = rollback.ok
+      ? ""
+      : ` Grid rollback may be incomplete (${rollback.message}).`;
     return {
       ok: false,
-      message: insErr.message.includes("source_content_hash")
-        ? `${insErr.message} Apply migration supabase/migrations/20260416120000_hours_logs_content_hash.sql (or npm run db:content-hash).`
-        : insErr.message,
-    };
-  }
-
-  const grid = await addParsedBbsEntriesToWeeklyGrid(entries);
-  if (!grid.ok) {
-    return {
-      ok: false,
-      message: `${grid.message} (OCR rows are in hours_logs; weekly grid was not updated.)`,
+      message: `${insErr.message.includes("source_content_hash") ? `${insErr.message} Apply migration supabase/migrations/20260416120000_hours_logs_content_hash.sql (or npm run db:content-hash).` : insErr.message}${rollbackNote}`,
     };
   }
 
   revalidatePath("/dashboard/hours");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/bbs-documentation");
 
   return {
     ok: true,
