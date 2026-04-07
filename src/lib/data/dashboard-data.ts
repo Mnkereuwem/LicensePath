@@ -317,3 +317,54 @@ export async function fetchHoursPageContext(weekStart: string): Promise<{
     licenseTrackLabel,
   };
 }
+
+export type BbsDocumentationListItem = {
+  storagePath: string;
+  displayName: string;
+  lineCount: number;
+  sourceKind: "pdf" | "photo";
+  firstImportedAt: string;
+};
+
+/** Grouped imports from `hours_logs` (PDF + photo scan saves). Each row is one active upload contributing to the progress bar. */
+export async function fetchBbsDocumentationList(): Promise<
+  BbsDocumentationListItem[]
+> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("hours_logs")
+    .select("source_storage_path, created_at")
+    .eq("supervisee_id", user.id)
+    .not("source_storage_path", "is", null);
+
+  if (error || !data?.length) return [];
+
+  const byPath = new Map<string, { count: number; minAt: string }>();
+  for (const row of data) {
+    const p = row.source_storage_path as string | null;
+    if (!p) continue;
+    const ca = String(row.created_at ?? "");
+    const cur = byPath.get(p);
+    if (!cur) {
+      byPath.set(p, { count: 1, minAt: ca });
+    } else {
+      cur.count += 1;
+      if (ca && ca < cur.minAt) cur.minAt = ca;
+    }
+  }
+
+  return Array.from(byPath.entries())
+    .map(([storagePath, { count, minAt }]) => ({
+      storagePath,
+      displayName: storagePath.split("/").pop() ?? storagePath,
+      lineCount: count,
+      sourceKind: /\.pdf$/i.test(storagePath) ? ("pdf" as const) : ("photo" as const),
+      firstImportedAt: minAt,
+    }))
+    .sort((a, b) => (a.firstImportedAt < b.firstImportedAt ? 1 : -1));
+}

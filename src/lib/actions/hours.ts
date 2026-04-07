@@ -67,6 +67,12 @@ function applyWeeklyCap(
   return { credited, rawTotal };
 }
 
+function revalidateHourDashboards() {
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/hours");
+  revalidatePath("/dashboard/bbs-documentation");
+}
+
 export async function saveWeekHours(
   weekStart: string,
   rawInput: Record<string, unknown>,
@@ -143,18 +149,17 @@ export async function saveWeekHours(
     }
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/hours");
+  revalidateHourDashboards();
   return { ok: true };
 }
 
 /**
- * Adds OCR / BBS log line items into `weekly_hour_entries` so the dashboard and log
- * hours page show imported time. Sums with any existing values for that week.
- * Clinical hours from the log (no F2F split) go to `direct_clinical`.
+ * Applies positive or negative BBS log line totals to `weekly_hour_entries`
+ * (same cap logic as manual saves). Clinical hours map to `direct_clinical`.
  */
-export async function addParsedBbsEntriesToWeeklyGrid(
+async function mutateWeeklyGridWithBbsEntries(
   entries: ParsedBbsEntry[],
+  sign: 1 | -1,
 ): Promise<
   { ok: true; weeksTouched: string[] } | { ok: false; message: string }
 > {
@@ -214,6 +219,7 @@ export async function addParsedBbsEntriesToWeeklyGrid(
     }
   }
 
+  const label = sign === 1 ? "Imported" : "Removal";
   for (const [weekStart, delta] of deltasByWeek) {
     const sumRow = emptyHourRecord();
     for (const e of entries) {
@@ -232,7 +238,7 @@ export async function addParsedBbsEntriesToWeeklyGrid(
       if (Math.abs(sumRow[k] - delta[k]) > TOL) {
         return {
           ok: false,
-          message: `Imported rows for week starting ${weekStart} do not add up (${k}: ${sumRow[k]} vs ${delta[k]}). Nothing was changed.`,
+          message: `${label} rows for week starting ${weekStart} do not add up (${k}: ${sumRow[k]} vs ${delta[k]}). Nothing was changed.`,
         };
       }
     }
@@ -259,7 +265,8 @@ export async function addParsedBbsEntriesToWeeklyGrid(
       }
     }
     for (const k of HOUR_CATEGORY_KEYS) {
-      merged[k] = Math.round((merged[k] + delta[k]) * 100) / 100;
+      const next = Math.round((merged[k] + sign * delta[k]) * 100) / 100;
+      merged[k] = Math.max(0, next);
     }
 
     const { credited } = applyWeeklyCap(merged, rules.weeklyCreditMaxPerWeek);
@@ -300,7 +307,31 @@ export async function addParsedBbsEntriesToWeeklyGrid(
   }
 
   weeksTouched.sort();
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/hours");
+  revalidateHourDashboards();
   return { ok: true, weeksTouched };
+}
+
+/**
+ * Adds OCR / BBS log line items into `weekly_hour_entries` so the dashboard and log
+ * hours page show imported time. Sums with any existing values for that week.
+ * Clinical hours from the log (no F2F split) go to `direct_clinical`.
+ */
+export async function addParsedBbsEntriesToWeeklyGrid(
+  entries: ParsedBbsEntry[],
+): Promise<
+  { ok: true; weeksTouched: string[] } | { ok: false; message: string }
+> {
+  return mutateWeeklyGridWithBbsEntries(entries, 1);
+}
+
+/**
+ * Subtracts hours that were previously added from a BBS import (e.g. document deleted).
+ * Re-applies weekly credit caps after removal.
+ */
+export async function subtractParsedBbsEntriesFromWeeklyGrid(
+  entries: ParsedBbsEntry[],
+): Promise<
+  { ok: true; weeksTouched: string[] } | { ok: false; message: string }
+> {
+  return mutateWeeklyGridWithBbsEntries(entries, -1);
 }

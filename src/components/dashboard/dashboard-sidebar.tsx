@@ -7,6 +7,7 @@ import {
   Camera,
   Clock,
   FileText,
+  FolderOpen,
   LayoutDashboard,
   Settings,
 } from "lucide-react";
@@ -21,6 +22,11 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/hours", label: "Log hours", icon: Clock },
   { href: "/dashboard/scan", label: "Scan log", icon: Camera },
+  {
+    href: "/dashboard/bbs-documentation",
+    label: "BBS Documentation",
+    icon: FolderOpen,
+  },
   {
     href: "/dashboard/upload-calculations",
     label: "Upload math",
