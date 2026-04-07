@@ -76,7 +76,8 @@ function clampHours(n: number): number {
   return Math.round(Math.min(n, 999) * 100) / 100;
 }
 
-const VISION_TIMEOUT_MS = 90_000;
+/** Align with host `maxDuration` (~300s); vision + IO should finish inside this. */
+const VISION_TIMEOUT_MS = 150_000;
 
 export async function extractBbsRowsFromScanImage(input: {
   base64: string;
@@ -110,7 +111,10 @@ export async function extractBbsRowsFromScanImage(input: {
             type: "text",
             text: "Extract all readable day/week rows from this hour log photo into the JSON schema.",
           },
-          { type: "image_url", image_url: { url: dataUrl } },
+          {
+            type: "image_url",
+            image_url: { url: dataUrl, detail: "low" },
+          },
         ],
       },
     ],

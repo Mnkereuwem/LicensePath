@@ -12,10 +12,8 @@ import { Camera, ImageIcon, Loader2, ScanLine, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { BbsScanReview } from "@/components/mobile/bbs-scan-review";
-import {
-  DUPLICATE_SCAN_DOCUMENT_CODE,
-  extractBbsScanFromStorage,
-} from "@/lib/actions/bbs-scan";
+import { DUPLICATE_SCAN_DOCUMENT_CODE } from "@/lib/actions/bbs-scan";
+import { extractBbsScanFromStorageRequest } from "@/lib/mobile/bbs-scan-extract-client";
 import {
   captureAndUploadBbsScan,
   isNativeBbsScanCamera,
@@ -54,7 +52,7 @@ export function BbsScanClient() {
   const runAfterUpload = useCallback(async (storagePath: string) => {
     setPhase("extracting");
     try {
-      let ex = await extractBbsScanFromStorage(storagePath);
+      let ex = await extractBbsScanFromStorageRequest(storagePath);
       if (!ex.ok && "code" in ex && ex.code === DUPLICATE_SCAN_DOCUMENT_CODE) {
         setPhase("idle");
         setDuplicateAsk({ storagePath, message: ex.message });
@@ -92,7 +90,7 @@ export function BbsScanClient() {
     setDuplicateAsk(null);
     setPhase("extracting");
     try {
-      const ex = await extractBbsScanFromStorage(path, {
+      const ex = await extractBbsScanFromStorageRequest(path, {
         confirmDuplicate: true,
       });
       setPhase("idle");
