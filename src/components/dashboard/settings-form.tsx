@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { updateSuperviseeSettings } from "@/lib/actions/settings";
+import {
+  LICENSE_TRACK_OPTIONS,
+  type LicenseTrackId,
+} from "@/lib/licensing/license-tracks";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,12 +26,17 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
+const selectClass =
+  "border-input bg-background ring-offset-background focus-visible:ring-ring flex min-h-11 w-full rounded-md border px-3 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+
 export function SettingsForm({
   fullName,
+  licenseTrack,
   bbsRegistrationAt,
   email,
 }: {
   fullName: string;
+  licenseTrack: LicenseTrackId;
   bbsRegistrationAt: string;
   email: string;
 }) {
@@ -71,6 +80,46 @@ export function SettingsForm({
                   autoComplete="name"
                   placeholder="Alex Morgan"
                 />
+              </Field>
+            </FieldSet>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/80 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg">Credential &amp; board</CardTitle>
+          <CardDescription>
+            Used by the AI documentation reader when you scan a photo or upload
+            a PDF hour log—we match prompts to the worksheets your state board
+            typically uses. Always review extracted hours before saving.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup>
+            <FieldSet className="rounded-xl border p-4">
+              <Field orientation="vertical">
+                <FieldLabel htmlFor="license_track">
+                  Your license path (state + credential)
+                </FieldLabel>
+                <FieldDescription>
+                  California BBS (ASW, LMFT, LPCC), New York (LMHC, LCSW), or
+                  Texas LPC—not legal advice; verify categories against current
+                  regulations.
+                </FieldDescription>
+                <select
+                  id="license_track"
+                  name="license_track"
+                  className={selectClass}
+                  defaultValue={licenseTrack}
+                  required
+                >
+                  {LICENSE_TRACK_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </Field>
             </FieldSet>
           </FieldGroup>

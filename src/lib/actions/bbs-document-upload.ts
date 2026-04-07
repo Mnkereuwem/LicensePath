@@ -12,6 +12,7 @@ import {
 } from "@/lib/openai/bbs-ocr";
 import { BBS_DOCUMENTS_BUCKET } from "@/lib/mobile/bbs-scan-types";
 import { sha256HexBuffer } from "@/lib/server/sha256-buffer";
+import { normalizeLicenseTrack } from "@/lib/licensing/license-tracks";
 import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -102,9 +103,11 @@ export async function uploadBbsDocumentAndExtract(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("organization_id")
+    .select("organization_id, license_track")
     .eq("id", user.id)
     .maybeSingle();
+
+  const licenseTrack = normalizeLicenseTrack(profile?.license_track);
 
   let organizationId = profile?.organization_id ?? null;
   if (!organizationId) {
@@ -137,10 +140,14 @@ export async function uploadBbsDocumentAndExtract(
   try {
     const text = await extractTextFromPdfBuffer(buf);
     if (text.length >= 40) {
-      entries = await extractBbsEntriesFromText(text);
+      entries = await extractBbsEntriesFromText(text, licenseTrack);
     }
     if (!entries.length) {
-      entries = await extractBbsEntriesFromPdfBuffer(buf, file.name);
+      entries = await extractBbsEntriesFromPdfBuffer(
+        buf,
+        file.name,
+        licenseTrack,
+      );
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "OCR failed.";
@@ -167,6 +174,7 @@ export async function uploadBbsDocumentAndExtract(
       model: "gpt-4o",
       fileName: file.name,
       contentHash,
+      licenseTrack,
       entries,
     }),
   ) as Record<string, unknown>;

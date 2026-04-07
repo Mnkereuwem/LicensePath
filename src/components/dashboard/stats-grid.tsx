@@ -1,7 +1,10 @@
 import { CalendarClock, Target } from "lucide-react";
 
+import {
+  formatSupervisionRatioLabel,
+  getWeeklySupervisionRatioStatusForTrack,
+} from "@/lib/compliance/bbs-rules";
 import type { DashboardModel } from "@/lib/dashboard/model";
-import { WEEKLY_CREDIT_CAP } from "@/lib/compliance/bbs-rules";
 import {
   Card,
   CardContent,
@@ -19,7 +22,17 @@ function formatDate(d: Date) {
 }
 
 export function StatsGrid({ model }: { model: DashboardModel }) {
-  const { hours, week, cappedWeekTotal, sunset, targets } = model;
+  const { hours, week, cappedWeekTotal, sunset, targets, weeklyCreditCap } =
+    model;
+
+  const supervisionRatio = getWeeklySupervisionRatioStatusForTrack(
+    {
+      clinicalHours: week.clinicalHours,
+      individualSupervisionHours: week.individualSupervisionHours,
+      groupSupervisionHours: week.groupSupervisionHours,
+    },
+    model.licenseTrack,
+  );
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -29,11 +42,14 @@ export function StatsGrid({ model }: { model: DashboardModel }) {
             <div>
               <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <Target className="text-primary size-5" aria-hidden />
-                Progress to 3,000 hours
+                Progress ({targets.total.toLocaleString()}h target)
               </CardTitle>
               <CardDescription>
-                Totals reflect BBS experience categories (direct vs.
-                non-clinical caps).
+                <span className="text-foreground font-medium">
+                  {model.licenseTrackLabel}
+                </span>
+                . Credited totals use categories tuned for your selected track
+                (direct, face-to-face, non-clinical caps).
               </CardDescription>
             </div>
           </div>
@@ -114,14 +130,32 @@ export function StatsGrid({ model }: { model: DashboardModel }) {
           </dl>
           <Separator />
           <p className="text-muted-foreground text-xs leading-relaxed">
-            Weekly-loaded total (after {WEEKLY_CREDIT_CAP}h cap):{" "}
+            Weekly-loaded total (after {weeklyCreditCap}h cap):{" "}
             <span className="text-foreground font-medium tabular-nums">
               {cappedWeekTotal}h
             </span>
-            {week.rawTotalHours != null && week.rawTotalHours > WEEKLY_CREDIT_CAP
+            {week.rawTotalHours != null && week.rawTotalHours > weeklyCreditCap
               ? ` (reported ${week.rawTotalHours}h before cap)`
               : null}
           </p>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {model.rulesBlurb}
+          </p>
+          {supervisionRatio !== "not_applicable" ? (
+            <p
+              className={
+                supervisionRatio === "invalid"
+                  ? "text-amber-700 dark:text-amber-400 text-xs font-medium"
+                  : "text-muted-foreground text-xs leading-relaxed"
+              }
+            >
+              Supervision check (this track, weeks with clinical):{" "}
+              {formatSupervisionRatioLabel(supervisionRatio)}
+              {supervisionRatio === "invalid"
+                ? " — add individual or group supervision to match your track’s weekly expectation."
+                : null}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -129,10 +163,11 @@ export function StatsGrid({ model }: { model: DashboardModel }) {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg font-semibold">
             <CalendarClock className="text-primary size-5" aria-hidden />
-            ASW sunset clock
+            Registration / experience clock
           </CardTitle>
           <CardDescription>
-            Six-year eligibility window from your saved BBS ASW registration date.
+            {model.sunsetYears}-year planning window from your saved registration
+            date (adjust the date in Settings if your board letter differs).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">

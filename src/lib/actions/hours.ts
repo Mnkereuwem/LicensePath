@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { WEEKLY_CREDIT_CAP } from "@/lib/compliance/bbs-rules";
+import { getTrackHourRules } from "@/lib/compliance/track-hour-rules";
+import { normalizeLicenseTrack } from "@/lib/licensing/license-tracks";
 import { startOfWeekMonday } from "@/lib/dates/week";
 import type { HourCategoryKey } from "@/lib/hours/categories";
 import { emptyHourRecord, HOUR_CATEGORY_KEYS } from "@/lib/hours/categories";
@@ -26,7 +27,10 @@ function parseHours(input: Record<string, unknown>): Record<HourCategoryKey, num
   return out;
 }
 
-function applyWeeklyCap(hours: Record<HourCategoryKey, number>): {
+function applyWeeklyCap(
+  hours: Record<HourCategoryKey, number>,
+  weeklyCreditMax: number,
+): {
   credited: Record<HourCategoryKey, number>;
   rawTotal: number;
 } {
@@ -41,11 +45,11 @@ function applyWeeklyCap(hours: Record<HourCategoryKey, number>): {
     };
   }
 
-  if (rawTotal <= WEEKLY_CREDIT_CAP) {
+  if (rawTotal <= weeklyCreditMax) {
     return { credited: { ...hours }, rawTotal };
   }
 
-  const scale = WEEKLY_CREDIT_CAP / rawTotal;
+  const scale = weeklyCreditMax / rawTotal;
   const credited = {} as Record<HourCategoryKey, number>;
   let sum = 0;
   for (let i = 0; i < HOUR_CATEGORY_KEYS.length - 1; i++) {
@@ -57,7 +61,7 @@ function applyWeeklyCap(hours: Record<HourCategoryKey, number>): {
   const lastKey = HOUR_CATEGORY_KEYS[HOUR_CATEGORY_KEYS.length - 1]!;
   credited[lastKey] = Math.max(
     0,
-    Math.round((WEEKLY_CREDIT_CAP - sum) * 100) / 100,
+    Math.round((weeklyCreditMax - sum) * 100) / 100,
   );
 
   return { credited, rawTotal };
@@ -81,7 +85,7 @@ export async function saveWeekHours(
 
   let { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("organization_id")
+    .select("organization_id, license_track")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -103,8 +107,9 @@ export async function saveWeekHours(
     };
   }
 
+  const rules = getTrackHourRules(normalizeLicenseTrack(profile?.license_track));
   const hours = parseHours(rawInput);
-  const { credited } = applyWeeklyCap(hours);
+  const { credited } = applyWeeklyCap(hours, rules.weeklyCreditMaxPerWeek);
 
   for (const key of HOUR_CATEGORY_KEYS) {
     const h = hours[key];
@@ -167,7 +172,7 @@ export async function addParsedBbsEntriesToWeeklyGrid(
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("organization_id")
+    .select("organization_id, license_track")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -187,6 +192,8 @@ export async function addParsedBbsEntriesToWeeklyGrid(
         "Profile not found after setup. Run the SQL migrations in supabase/migrations/ on your Supabase project.",
     };
   }
+
+  const rules = getTrackHourRules(normalizeLicenseTrack(profile?.license_track));
 
   const deltasByWeek = new Map<string, Record<HourCategoryKey, number>>();
   for (const e of entries) {
@@ -255,7 +262,7 @@ export async function addParsedBbsEntriesToWeeklyGrid(
       merged[k] = Math.round((merged[k] + delta[k]) * 100) / 100;
     }
 
-    const { credited } = applyWeeklyCap(merged);
+    const { credited } = applyWeeklyCap(merged, rules.weeklyCreditMaxPerWeek);
 
     for (const key of HOUR_CATEGORY_KEYS) {
       const h = merged[key];

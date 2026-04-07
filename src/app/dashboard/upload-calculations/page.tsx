@@ -1,10 +1,12 @@
 import { Calculator } from "lucide-react";
 
 import {
-  BBS_DAILY_CLINICAL_HOURS_MAX,
   DEFAULT_EXPERIENCE_YEAR,
-  WEEKLY_CREDIT_CAP,
 } from "@/lib/compliance/bbs-rules";
+import {
+  formatSupervisionGateShort,
+  getTrackHourRules,
+} from "@/lib/compliance/track-hour-rules";
 import {
   Card,
   CardContent,
@@ -12,31 +14,191 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  LICENSE_TRACK_IDS,
+  LICENSE_TRACK_OPTIONS,
+  normalizeLicenseTrack,
+} from "@/lib/licensing/license-tracks";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const metadata = {
-  title: "How uploads calculate hours | LicensePath",
+  title: "Upload math | LicensePath",
   description:
-    "Rules for PDF and photo imports: weekly caps, daily limits, duplicates, and credited vs reported time.",
+    "Per-track caps, targets, and supervision rules for PDF and photo imports.",
 };
 
-export default function UploadCalculationsPage() {
+export default async function UploadCalculationsPage() {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const track = user
+    ? normalizeLicenseTrack(
+        (
+          await supabase
+            .from("profiles")
+            .select("license_track")
+            .eq("id", user.id)
+            .maybeSingle()
+        ).data?.license_track,
+      )
+    : "ca_asw";
+  const rules = getTrackHourRules(track);
+  const trackLabel =
+    LICENSE_TRACK_OPTIONS.find((o) => o.id === track)?.label ?? track;
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <div className="flex items-start gap-3">
         <div className="bg-primary/10 text-primary ring-primary/15 flex size-11 shrink-0 items-center justify-center rounded-xl ring-1">
           <Calculator className="size-5" aria-hidden />
         </div>
         <div className="min-w-0">
           <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-            How uploads calculate hours
+            Upload math
           </h1>
           <p className="text-muted-foreground mt-1 text-sm leading-relaxed sm:text-base">
-            LicensePath turns BBS-style logs into database rows and weekly
-            totals. Here is what happens after you upload a PDF or scan a photo,
-            before anything reaches your board packet.
+            How PDF and photo imports become rows and credited weekly totals. Caps
+            and dashboard targets follow your{" "}
+            <span className="text-foreground font-medium">
+              license track in Settings
+            </span>
+            . The table below lists every track’s guardrails in one place.
           </p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Track rules table</CardTitle>
+          <CardDescription>
+            Values the app uses for weekly credit caps, scan day limits, dashboard
+            progress targets, and supervision checks. Product guardrails—not legal
+            advice; verify with your board.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead>
+              <tr className="bg-muted/50 border-b">
+                <th className="py-2.5 pr-2 font-medium">Track</th>
+                <th className="py-2.5 px-1 font-medium tabular-nums" title="Weekly credited cap (all categories)">
+                  Wk cap
+                </th>
+                <th className="py-2.5 px-1 font-medium tabular-nums" title="Daily direct clinical guardrail on scans">
+                  Day*
+                </th>
+                <th className="py-2.5 px-1 font-medium tabular-nums" title="Total hours target (dashboard)">
+                  Target
+                </th>
+                <th className="py-2.5 px-1 font-medium tabular-nums" title="Direct clinical minimum (planning)">
+                  Clin min
+                </th>
+                <th className="py-2.5 px-1 font-medium tabular-nums" title="Face-to-face minimum (planning)">
+                  F2F min
+                </th>
+                <th className="py-2.5 px-1 font-medium tabular-nums" title="Non-clinical maximum (planning)">
+                  NC max
+                </th>
+                <th className="py-2.5 px-1 font-medium tabular-nums" title="Experience clock window (years)">
+                  Yrs
+                </th>
+                <th className="py-2.5 pl-1 font-medium">Supervision†</th>
+              </tr>
+            </thead>
+            <tbody>
+              {LICENSE_TRACK_IDS.map((id) => {
+                const r = getTrackHourRules(id);
+                const lab =
+                  LICENSE_TRACK_OPTIONS.find((o) => o.id === id)?.label ?? id;
+                const isYou = id === track;
+                return (
+                  <tr
+                    key={id}
+                    className={
+                      isYou
+                        ? "bg-primary/8 border-border/60 border-b"
+                        : "border-border/60 border-b"
+                    }
+                  >
+                    <td className="text-foreground py-2 pr-2">
+                      {lab}
+                      {isYou ? (
+                        <span className="text-primary ml-1.5 text-xs font-medium">
+                          (you)
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="tabular-nums px-1 py-2">
+                      {r.weeklyCreditMaxPerWeek}h
+                    </td>
+                    <td className="tabular-nums px-1 py-2">
+                      {r.dailyClinicalHoursMax}h
+                    </td>
+                    <td className="tabular-nums px-1 py-2">
+                      {r.totalHoursTarget.toLocaleString()}
+                    </td>
+                    <td className="tabular-nums px-1 py-2">
+                      {r.directClinicalMin.toLocaleString()}
+                    </td>
+                    <td className="tabular-nums px-1 py-2">
+                      {r.faceToFaceMin.toLocaleString()}
+                    </td>
+                    <td className="tabular-nums px-1 py-2">
+                      {r.nonClinicalMax.toLocaleString()}
+                    </td>
+                    <td className="tabular-nums px-1 py-2">{r.sunsetYears}</td>
+                    <td className="text-muted-foreground max-w-[14rem] py-2 pl-1 text-xs leading-snug">
+                      {formatSupervisionGateShort(r.weeklySupervisionGate)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="text-muted-foreground mt-3 space-y-1 text-xs leading-relaxed">
+            <p>
+              *<span className="font-medium">Day</span> — per-date direct clinical
+              limit for photo scans (model cap + save validation).
+            </p>
+            <p>
+              †<span className="font-medium">Supervision</span> — expectation for
+              weeks where you report clinical hours (individual / group buckets on
+              the grid); see dashboard “This week” card for your status.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="text-lg">Your track (Settings)</CardTitle>
+          <CardDescription>{trackLabel}</CardDescription>
+        </CardHeader>
+        <CardContent className="text-muted-foreground space-y-2 text-sm leading-relaxed">
+          <p>
+            <span className="text-foreground font-medium">Weekly credit cap:</span>{" "}
+            {rules.weeklyCreditMaxPerWeek}h combined across categories (credited
+            hours).
+          </p>
+          <p>
+            <span className="text-foreground font-medium">
+              Daily direct clinical guardrail (scans):
+            </span>{" "}
+            {rules.dailyClinicalHoursMax}h per date row before save is blocked or
+            model-capped.
+          </p>
+          <p>
+            <span className="text-foreground font-medium">
+              Progress target (dashboard):
+            </span>{" "}
+            {rules.totalHoursTarget.toLocaleString()}h total experience planning
+            figure for this track.
+          </p>
+          <p className="text-foreground/90">{rules.rulesBlurb}</p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -50,18 +212,16 @@ export default function UploadCalculationsPage() {
         <CardContent className="text-muted-foreground space-y-3 text-sm leading-relaxed">
           <p>
             <span className="text-foreground font-medium">Log hours (PDF).</span>{" "}
-            You choose a PDF; the server extracts rows with GPT-4o and saves
-            them after upload. There is a confirmation step in the UI only when
-            the file matches a prior upload (see duplicates below).
+            You choose a PDF; the server extracts rows with GPT-4o (prompt tuned
+            to your track) and saves them after upload. There is a confirmation
+            step in the UI only when the file matches a prior upload (see
+            duplicates below).
           </p>
           <p>
             <span className="text-foreground font-medium">Scan log (photo).</span>{" "}
-            You take or pick an image; it is stored privately, then GPT-4o
-            vision reads it. You review and edit extracted fields, then{" "}
-            <span className="text-foreground font-medium">Confirm and save</span>{" "}
-            inserts rows. Nothing is written to{" "}
-            <span className="text-foreground font-medium">hours_logs</span> until
-            you confirm.
+            You take or pick an image; it is stored privately, then GPT-4o vision
+            reads it using your track. You review and edit extracted fields, then
+            save inserts rows.
           </p>
         </CardContent>
       </Card>
@@ -75,16 +235,14 @@ export default function UploadCalculationsPage() {
         </CardHeader>
         <CardContent className="text-muted-foreground space-y-3 text-sm leading-relaxed">
           <p>
-            For each week (Monday start), categories like direct clinical,
-            supervision, etc. have a{" "}
+            For each week (Monday start), categories have a{" "}
             <span className="text-foreground font-medium">reported</span> total
-            that is the sum of what you typed or imported. Separately,{" "}
-            <span className="text-foreground font-medium">credited</span> hours
-            may be lower when the weekly rule below applies.
+            that is the sum of what you typed or imported.{" "}
+            <span className="text-foreground font-medium">Credited</span> hours
+            may be lower when the weekly cap for your track applies.
           </p>
           <p>
-            Dashboard rollups that describe progress toward BBS targets usually
-            use <span className="text-foreground font-medium">credited</span>{" "}
+            Dashboard rollups use <span className="text-foreground font-medium">credited</span>{" "}
             totals across weeks. The current-week card may show both the capped
             total and “reported before cap” when they differ.
           </p>
@@ -93,12 +251,10 @@ export default function UploadCalculationsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">
-            Weekly credit cap ({WEEKLY_CREDIT_CAP}h)
-          </CardTitle>
+          <CardTitle className="text-lg">Weekly credit cap</CardTitle>
           <CardDescription>
-            Aligned with the usual ASW weekly log ceiling; applies per calendar
-            week.
+            Your cap is {rules.weeklyCreditMaxPerWeek}h (see table above for other
+            tracks).
           </CardDescription>
         </CardHeader>
         <CardContent className="text-muted-foreground space-y-3 text-sm leading-relaxed">
@@ -107,30 +263,10 @@ export default function UploadCalculationsPage() {
             <span className="text-foreground font-medium">
               sum of all categories together
             </span>{" "}
-            (clinical, face-to-face, non-clinical, individual and group
-            supervision, other) is limited to{" "}
-            <span className="text-foreground font-medium tabular-nums">
-              {WEEKLY_CREDIT_CAP} hours
-            </span>{" "}
-            when we compute{" "}
-            <span className="text-foreground font-medium">credited</span>{" "}
-            hours. If imports push that week above {WEEKLY_CREDIT_CAP} total,
-            credited amounts are{" "}
-            <span className="text-foreground font-medium">
-              scaled down proportionally
-            </span>{" "}
-            so the credited pieces still add up to {WEEKLY_CREDIT_CAP} for that
-            week.
-          </p>
-          <p>
-            Importing the{" "}
-            <span className="text-foreground font-medium">same file twice</span>{" "}
-            stacks raw hours again. That can trigger the cap even when a single
-            pass looked fine, so{" "}
-            <span className="text-foreground font-medium">
-              credited totals will not simply double
-            </span>
-            .
+            is limited to your track’s weekly maximum when we compute{" "}
+            <span className="text-foreground font-medium">credited</span> hours.
+            If imports push that week above the cap, credited amounts are scaled
+            down proportionally so they add up to the cap.
           </p>
         </CardContent>
       </Card>
@@ -138,20 +274,17 @@ export default function UploadCalculationsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">
-            Daily direct clinical guardrail ({BBS_DAILY_CLINICAL_HOURS_MAX}h)
+            Daily direct clinical guardrail (scans)
           </CardTitle>
-          <CardDescription>Used when reviewing photo scans.</CardDescription>
+          <CardDescription>
+            Your track uses {rules.dailyClinicalHoursMax}h per day for this check.
+          </CardDescription>
         </CardHeader>
         <CardContent className="text-muted-foreground space-y-3 text-sm leading-relaxed">
           <p>
-            On each date row from a{" "}
-            <span className="text-foreground font-medium">scan</span>, direct
-            clinical counseling hours are not accepted above{" "}
-            <span className="text-foreground font-medium tabular-nums">
-              {BBS_DAILY_CLINICAL_HOURS_MAX} hours
-            </span>{" "}
-            per day without correction. The model may cap high reads; you can
-            edit before save.
+            On each date row from a scan, direct clinical counseling hours above
+            your track’s daily limit are rejected on save or capped during model
+            cleanup; you can edit before save.
           </p>
         </CardContent>
       </Card>
@@ -166,9 +299,7 @@ export default function UploadCalculationsPage() {
             We fingerprint each PDF or scan image (SHA-256). If that exact file
             was already saved to your{" "}
             <span className="text-foreground font-medium">hours_logs</span>, you
-            get a warning before OCR or vision runs again. You can still
-            proceed, but that usually means duplicating hours—only do it on
-            purpose.
+            get a warning before OCR or vision runs again.
           </p>
         </CardContent>
       </Card>
@@ -196,21 +327,14 @@ export default function UploadCalculationsPage() {
         </CardHeader>
         <CardContent className="text-muted-foreground space-y-3 text-sm leading-relaxed">
           <p>
-            After an import, we verify that each week’s bucketed totals match
-            the sum of the rows we are adding. If they diverge, the update is
-            blocked so bad aggregation does not silently change your grid.
-          </p>
-          <p>
-            Multiple rows for the{" "}
-            <span className="text-foreground font-medium">same date</span> add
-            together in the weekly grid. The scan review screen warns when more
-            than one row shares a service date.
+            After an import, we verify that each week’s bucketed totals match the
+            sum of the rows we are adding. If they diverge, the update is blocked.
           </p>
         </CardContent>
       </Card>
 
       <p className="text-muted-foreground border-border text-xs leading-relaxed">
-        These rules are software guardrails for tracking. Your BBS packet and
+        These rules are software guardrails for tracking. Your board packet and
         employer requirements may differ; confirm figures on your official weekly
         log and with your supervisor or board counsel.
       </p>

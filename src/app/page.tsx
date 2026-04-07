@@ -10,10 +10,13 @@ import {
   ClipboardCheck,
   FileSpreadsheet,
   Lock,
+  ScanLine,
   Shield,
   UserRound,
   Users,
 } from "lucide-react";
+
+import { LICENSE_TRACK_OPTIONS } from "@/lib/licensing/license-tracks";
 
 import { buttonVariants } from "@/lib/button-variants";
 import {
@@ -79,16 +82,36 @@ export default async function HomePage() {
             </div>
             <div className="max-w-3xl space-y-6">
               <p className="text-primary text-sm font-semibold tracking-[0.2em] uppercase">
-                Built for California ASWs
+                Multi-state · AI hour-log reader
               </p>
               <h1 className="font-heading text-foreground text-4xl font-semibold tracking-tight sm:text-6xl sm:leading-[1.08] lg:text-7xl lg:leading-[1.06]">
-                Hour tracking that respects BBS math, not spreadsheet hope.
+                Hour tracking and documentation that fit your board—not a
+                generic timesheet.
               </h1>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                License FYI helps Associate Clinical Social Workers log
-                experience with guardrails for weekly caps, supervision ratios,
-                and the path to 3,000 hours—backed by Supabase auth, Row Level
-                Security, and audit-minded exports coming soon.
+                License FYI is built for mental health licensing paths in{" "}
+                <span className="text-foreground font-medium">
+                  California, New York, and Texas
+                </span>
+                : pick your credential in settings, then use structured weekly
+                entry plus an{" "}
+                <span className="text-foreground font-medium">
+                  AI-powered reader
+                </span>{" "}
+                that interprets photos and PDFs of board-style hour logs
+                (GPT‑4o vision). Supabase auth and Row Level Security keep data
+                scoped to you.
+              </p>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Supported tracks include{" "}
+                {LICENSE_TRACK_OPTIONS.filter((o) => o.id !== "ca_asw").map((o, i, a) => (
+                  <span key={o.id}>
+                    {o.label.replace(/^California — |^New York — |^Texas — /, "")}
+                    {i < a.length - 1 ? " · " : ""}
+                  </span>
+                ))}{" "}
+                and California ASW/ACSW (BBS)—each with prompts tuned to typical
+                worksheets for that board.
               </p>
               <div className="flex flex-wrap gap-3 pt-2">
                 <Link
@@ -117,11 +140,25 @@ export default async function HomePage() {
               What you can do today
             </h2>
             <p className="text-muted-foreground mt-2 text-sm leading-relaxed sm:text-base">
-              Clean dashboards, defensible categories, and a registration clock
-              aligned to how boards actually score your packet.
+              Dashboards, weekly caps, and an optional AI pass over your paper or
+              PDF logs—always with human review before anything is saved.
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="border-border/60 bg-card/80 shadow-lg shadow-black/20">
+              <CardHeader>
+                <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
+                  <ScanLine className="size-5" aria-hidden />
+                </div>
+                <CardTitle className="text-base">AI documentation reader</CardTitle>
+                <CardDescription>
+                  Photograph a weekly log or upload a PDF; the model reads
+                  dates, supervision, and clinical hours using your selected
+                  license track. You preview and confirm before rows hit your
+                  progress.
+                </CardDescription>
+              </CardHeader>
+            </Card>
             <Card className="border-border/60 bg-card/80 shadow-lg shadow-black/20">
               <CardHeader>
                 <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
@@ -129,9 +166,9 @@ export default async function HomePage() {
                 </div>
                 <CardTitle className="text-base">Structured hour entry</CardTitle>
                 <CardDescription>
-                  Weekly grid with face-to-face, direct clinical, supervision, and
-                  non-clinical buckets that map cleanly to how you will present
-                  hours.
+                  Weekly grid with categories that roll up for reporting—tuned
+                  for BBS-style paths and compatible with other board workflows
+                  in the app today.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -140,10 +177,11 @@ export default async function HomePage() {
                 <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-xl bg-chart-2/15 ring-1 ring-chart-2/25">
                   <BarChart3 className="size-5" aria-hidden />
                 </div>
-                <CardTitle className="text-base">Live compliance cues</CardTitle>
+                <CardTitle className="text-base">Live progress cues</CardTitle>
                 <CardDescription>
-                  Dashboard cards surface total progress toward 3,000 hours, the
-                  current week supervision ratio, and a six-year sunset countdown.
+                  Dashboard cards surface hours toward typical licensure targets
+                  (e.g. 3,000-hour contexts), weekly credit limits, and
+                  registration or experience clocks where applicable.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -174,9 +212,9 @@ export default async function HomePage() {
               </h2>
               <p className="text-muted-foreground mt-3 text-sm leading-relaxed sm:text-base">
                 These are common patterns—not specific cases—but they show
-                why “I’ll log it someday” costs time, money, and stress when
-                the BBS packet is due. Always verify categories against current
-                regulations.
+                why “I’ll log it someday” costs time and stress when your
+                packet is due. Always verify categories against your board’s
+                current regulations.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -190,10 +228,10 @@ export default async function HomePage() {
                   </CardTitle>
                   <CardDescription>
                     Face-to-face supervision, direct clinical service, and
-                    non-clinical hours follow different BBS rules. When they’re
-                    flattened into a single total, you often end up re-splitting
-                    hundreds of hours from memory—or supervisor sign-offs—right
-                    before you file.
+                    non-clinical hours follow different rules by board. When
+                    they’re flattened into a single total, you often end up
+                    re-splitting hundreds of hours from memory—or supervisor
+                    sign-offs—right before you file.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -206,10 +244,10 @@ export default async function HomePage() {
                     Ignoring weekly credit limits until the end
                   </CardTitle>
                   <CardDescription>
-                    Boards cap how much experience can count per week. Raw
-                    overtime or “I worked 52 hours” notes don’t show where the
-                    cap already bit—so people discover late that a chunk of time
-                    won’t move their 3,000-hour needle the way they assumed.
+                    Boards often cap how much experience can count per week.
+                    Raw overtime notes don’t show where the cap already
+                    bit—so people discover late that some time won’t count the
+                    way they assumed.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -222,10 +260,9 @@ export default async function HomePage() {
                     Supervision ratios checked only at packet time
                   </CardTitle>
                   <CardDescription>
-                    Ratio requirements are evaluated over defined periods. If you
-                    only eyeball totals once a year, it’s easy to drift
-                    off-pattern for weeks—and painful to fix retroactively when
-                    supervisors’ calendars don’t line up.
+                    Supervision ratios are evaluated over defined periods. If
+                    you only eyeball totals once a year, it’s easy to drift
+                    off-pattern—and painful to fix retroactively.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -238,11 +275,10 @@ export default async function HomePage() {
                     Guessing the six-year registration window
                   </CardTitle>
                   <CardDescription>
-                    The ASW registration clock is unforgiving. Relying on an old
-                    welcome email or employer HR for the exact registration
-                    anniversary—instead of tracking it as part of your
-                    workflow—means you can mis-plan how long you truly have to
-                    finish hours.
+                    Registration and experience clocks are unforgiving. Relying
+                    on an old welcome email instead of tracking anniversaries in
+                    your workflow means you can mis-plan how long you truly have
+                    to finish hours.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -259,7 +295,7 @@ export default async function HomePage() {
               Use cases beyond “I like spreadsheets”
             </h2>
             <p className="text-muted-foreground mt-2 text-sm leading-relaxed sm:text-base">
-              License FYI is for anyone who wants BBS-shaped structure from the
+              License FYI is for anyone who wants board-shaped structure from the
               start—not a prettified timesheet you’ll outgrow.
             </p>
           </div>
@@ -269,10 +305,10 @@ export default async function HomePage() {
                 <div className="text-primary mb-2 flex size-10 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
                   <UserRound className="size-5" aria-hidden />
                 </div>
-                <CardTitle className="text-base">Brand-new ASWs</CardTitle>
+                <CardTitle className="text-base">Trainees &amp; associates</CardTitle>
                 <CardDescription>
                   Learn the category buckets your board will care about before
-                  you have two years of miscategorized notes in a Notes app.
+                  you have years of miscategorized notes in a Notes app.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -284,7 +320,7 @@ export default async function HomePage() {
                 <CardTitle className="text-base">Multiple jobs or sites</CardTitle>
                 <CardDescription>
                   Roll up hours in one place when each employer’s payroll system
-                  uses different labels and none of them speak “BBS category.”
+                  uses different labels and none of them speak “board category.”
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -349,7 +385,10 @@ export default async function HomePage() {
             © {new Date().getFullYear()} License FYI · license.fyi · Experience
             tracking only
           </p>
-          <p>Not legal advice; verify categories against current BBS regulations.</p>
+          <p>
+            Not legal advice; verify categories against your licensing board’s
+            current rules. AI readings can be wrong—always review before saving.
+          </p>
         </div>
       </footer>
     </div>

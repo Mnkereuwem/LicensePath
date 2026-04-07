@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import { addParsedBbsEntriesToWeeklyGrid } from "@/lib/actions/hours";
-import { BBS_DAILY_CLINICAL_HOURS_MAX } from "@/lib/compliance/bbs-rules";
+import { getTrackHourRules } from "@/lib/compliance/track-hour-rules";
 import { countHoursLogsByContentHash } from "@/lib/hours/hours-log-content-hash";
 import {
   BBS_UPLOADS_BUCKET,
   type BbsScanConfirmRowInput,
   type BbsScanExtractedEntry,
 } from "@/lib/mobile/bbs-scan-types";
+import { normalizeLicenseTrack } from "@/lib/licensing/license-tracks";
 import { extractBbsRowsFromScanImage } from "@/lib/openai/bbs-scan-extract";
 import type { ParsedBbsEntry } from "@/lib/openai/bbs-ocr";
 import { sha256HexBuffer } from "@/lib/server/sha256-buffer";
@@ -50,6 +51,23 @@ export async function extractBbsScanFromStorage(
   storagePath: string,
   options?: { confirmDuplicate?: boolean },
 ): Promise<ExtractBbsScanResult> {
+  try {
+    return await extractBbsScanFromStorageImpl(storagePath, options);
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
+    console.error("[extractBbsScanFromStorage]", raw);
+    return {
+      ok: false,
+      message:
+        "Scan could not finish on the server. If this keeps happening: run database migrations (profiles.license_track, hours_logs.source_content_hash), set OPENAI_API_KEY on your host, and ensure your plan allows long server runs (~2 min) for AI vision.",
+    };
+  }
+}
+
+async function extractBbsScanFromStorageImpl(
+  storagePath: string,
+  options?: { confirmDuplicate?: boolean },
+): Promise<ExtractBbsScanResult> {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -74,6 +92,16 @@ export async function extractBbsScanFromStorage(
 
   const buf = Buffer.from(await file.arrayBuffer());
   const contentHash = sha256HexBuffer(buf);
+
+  let licenseTrack = normalizeLicenseTrack(null);
+  const { data: profileRow, error: profileErr } = await supabase
+    .from("profiles")
+    .select("license_track")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!profileErr && profileRow) {
+    licenseTrack = normalizeLicenseTrack(profileRow.license_track);
+  }
 
   if (!options?.confirmDuplicate) {
     const { count, error: cntErr } = await countHoursLogsByContentHash(
@@ -100,7 +128,11 @@ export async function extractBbsScanFromStorage(
 
   let entries: BbsScanExtractedEntry[];
   try {
-    entries = await extractBbsRowsFromScanImage({ base64, mimeType: mime });
+    entries = await extractBbsRowsFromScanImage({
+      base64,
+      mimeType: mime,
+      licenseTrack,
+    });
   } catch (e) {
     const raw = e instanceof Error ? e.message : "Vision extraction failed.";
     if (/timeout|timed out|ETIMEDOUT|aborted/i.test(raw)) {
@@ -180,21 +212,9 @@ export async function confirmBbsScanAndSave(input: {
     };
   }
 
-  for (const r of input.rows) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.work_date)) {
-      return { ok: false, message: `Invalid date: ${r.work_date}` };
-    }
-    if (r.direct_clinical_counseling_hours > BBS_DAILY_CLINICAL_HOURS_MAX) {
-      return {
-        ok: false,
-        message: `Direct clinical hours on ${r.work_date} exceed the daily guardrail (${BBS_DAILY_CLINICAL_HOURS_MAX}h). Reduce the value or split across days.`,
-      };
-    }
-  }
-
-  const { data: profile } = await supabase
+  let { data: profile } = await supabase
     .from("profiles")
-    .select("organization_id")
+    .select("organization_id, license_track")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -204,7 +224,32 @@ export async function confirmBbsScanAndSave(input: {
     if (!fixed.ok) {
       return { ok: false, message: fixed.message };
     }
-    organizationId = fixed.organizationId;
+    const { data: again } = await supabase
+      .from("profiles")
+      .select("organization_id, license_track")
+      .eq("id", user.id)
+      .maybeSingle();
+    profile = again;
+    organizationId = profile?.organization_id ?? fixed.organizationId;
+  }
+
+  if (!organizationId) {
+    return { ok: false, message: "Could not resolve organization for your profile." };
+  }
+
+  const licenseTrack = normalizeLicenseTrack(profile?.license_track);
+  const dailyMax = getTrackHourRules(licenseTrack).dailyClinicalHoursMax;
+
+  for (const r of input.rows) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.work_date)) {
+      return { ok: false, message: `Invalid date: ${r.work_date}` };
+    }
+    if (r.direct_clinical_counseling_hours > dailyMax) {
+      return {
+        ok: false,
+        message: `Direct clinical hours on ${r.work_date} exceed your track’s daily guardrail (${dailyMax}h). Reduce the value or split across days.`,
+      };
+    }
   }
 
   const parsedForGrid: ParsedBbsEntry[] = input.rows.map((r) => ({
@@ -220,6 +265,7 @@ export async function confirmBbsScanAndSave(input: {
       model: "gpt-4o",
       source: "mobile_scan",
       contentHash: input.contentHash,
+      licenseTrack,
       fileName: input.fileNameHint ?? input.storagePath,
       rows: input.rows,
     }),

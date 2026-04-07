@@ -1,3 +1,5 @@
+import type { LicenseTrackId } from "@/lib/licensing/license-tracks";
+
 export type DashboardHourSnapshot = {
   totalCredited: number;
   directClinicalCredited: number;
@@ -17,6 +19,12 @@ export type DashboardModel = {
   week: DashboardWeekSnapshot;
   cappedWeekTotal: number;
   totalProgressPercent: number;
+  /** Selected in Settings; drives caps and targets */
+  licenseTrack: LicenseTrackId;
+  licenseTrackLabel: string;
+  weeklyCreditCap: number;
+  sunsetYears: number;
+  rulesBlurb: string;
   sunset: {
     registrationDate: Date;
     endDate: Date;

@@ -3,8 +3,8 @@ import { MobileAppLayout } from "@/components/mobile/mobile-app-layout";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-/** BBS upload runs long OpenAI calls; required on Vercel Pro (Hobby max is 10s). */
-export const maxDuration = 60;
+/** Must cover scan + PDF OCR; nested routes inherit limits on some hosts (scan uses GPT‑4o vision). */
+export const maxDuration = 180;
 export const runtime = "nodejs";
 
 export default async function DashboardLayout({

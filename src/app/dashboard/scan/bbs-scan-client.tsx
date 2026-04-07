@@ -31,6 +31,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+function describeScanFailure(messageOrError: string | unknown): string {
+  const msg =
+    typeof messageOrError === "string"
+      ? messageOrError
+      : messageOrError instanceof Error
+        ? messageOrError.message
+        : "Something went wrong.";
+  if (
+    /Server Components render|digest/i.test(msg) ||
+    /Execution timed out|FUNCTION_INVOCATION_TIMEOUT|504/i.test(msg)
+  ) {
+    return "Server timeout or deploy setup. Redeploy the latest app, run Supabase SQL migrations (license_track + content_hash), set OPENAI_API_KEY on the server, and use a host tier that allows ~2 minute functions.";
+  }
+  if (/Failed to fetch|NetworkError|load failed/i.test(msg)) {
+    return "Network error—check your connection and try again.";
+  }
+  return msg;
+}
+
 export function BbsScanClient() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -61,7 +80,9 @@ export function BbsScanClient() {
       }
       setPhase("idle");
       if (!ex.ok) {
-        toast.error("Could not read the log", { description: ex.message });
+        toast.error("Could not read the log", {
+          description: describeScanFailure(ex.message),
+        });
         return;
       }
       if (!ex.entries.length) {
@@ -79,14 +100,7 @@ export function BbsScanClient() {
       });
     } catch (err) {
       setPhase("idle");
-      const msg =
-        err instanceof Error ? err.message : "Something went wrong reading the photo.";
-      toast.error("Scan failed", {
-        description:
-          msg.includes("Failed to fetch") || msg.includes("Network")
-            ? "Network error—check your connection and try again."
-            : msg,
-      });
+      toast.error("Scan failed", { description: describeScanFailure(err) });
     }
   }, []);
 
@@ -101,7 +115,9 @@ export function BbsScanClient() {
       });
       setPhase("idle");
       if (!ex.ok) {
-        toast.error("Could not read the log", { description: ex.message });
+        toast.error("Could not read the log", {
+          description: describeScanFailure(ex.message),
+        });
         return;
       }
       if (!ex.entries.length) {
@@ -119,9 +135,7 @@ export function BbsScanClient() {
       });
     } catch (err) {
       setPhase("idle");
-      const msg =
-        err instanceof Error ? err.message : "Something went wrong reading the photo.";
-      toast.error("Scan failed", { description: msg });
+      toast.error("Scan failed", { description: describeScanFailure(err) });
     }
   }, [duplicateAsk]);
 

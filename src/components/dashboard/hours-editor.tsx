@@ -7,7 +7,6 @@ import { toast } from "sonner";
 
 import { BbsUploadDropzone } from "@/components/dashboard/bbs-upload-dropzone";
 import { saveWeekHours } from "@/lib/actions/hours";
-import { WEEKLY_CREDIT_CAP } from "@/lib/compliance/bbs-rules";
 import {
   formatLocalISODate,
   formatWeekRangeLabel,
@@ -46,9 +45,15 @@ function addDays(iso: string, days: number): string {
 export function HoursEditor({
   weekStart,
   initial,
+  weeklyCreditCap,
+  licenseTrackLabel,
+  rulesBlurb,
 }: {
   weekStart: string;
   initial: Record<HourCategoryKey, number>;
+  weeklyCreditCap: number;
+  licenseTrackLabel: string;
+  rulesBlurb: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -65,9 +70,9 @@ export function HoursEditor({
   );
 
   const creditedPreview =
-    rawWeekSum <= WEEKLY_CREDIT_CAP
+    rawWeekSum <= weeklyCreditCap
       ? rawWeekSum
-      : Math.round(WEEKLY_CREDIT_CAP * 100) / 100;
+      : Math.round(weeklyCreditCap * 100) / 100;
 
   async function onSave() {
     startTransition(async () => {
@@ -75,8 +80,8 @@ export function HoursEditor({
       if (res.ok) {
         toast.success("Week saved", {
           description:
-            rawWeekSum > WEEKLY_CREDIT_CAP
-              ? `Totals above ${WEEKLY_CREDIT_CAP}h are scaled for credit this week.`
+            rawWeekSum > weeklyCreditCap
+              ? `Totals above ${weeklyCreditCap}h are scaled for credit this week.`
               : "Your dashboard will reflect these hours.",
         });
         router.refresh();
@@ -98,10 +103,11 @@ export function HoursEditor({
           Log hours
         </h1>
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          Enter hours for one week (Monday–Sunday). We apply the weekly{" "}
-          {WEEKLY_CREDIT_CAP}h credit cap across categories before writing{" "}
-          <span className="text-foreground font-medium">credited hours</span>{" "}
-          to your record.
+          Track: <span className="text-foreground font-medium">{licenseTrackLabel}</span>
+          . Enter hours for one week (Monday–Sunday). A{" "}
+          {weeklyCreditCap}h credit cap applies across categories before writing{" "}
+          <span className="text-foreground font-medium">credited hours</span>.{" "}
+          <span className="text-foreground/90">{rulesBlurb}</span>
         </p>
       </div>
 
@@ -168,7 +174,7 @@ export function HoursEditor({
             <span className="text-muted-foreground">Creditable this week</span>
             <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
               {creditedPreview.toFixed(2)}h
-              {rawWeekSum > WEEKLY_CREDIT_CAP ? (
+              {rawWeekSum > weeklyCreditCap ? (
                 <span className="text-muted-foreground ml-2 font-normal">
                   (capped)
                 </span>

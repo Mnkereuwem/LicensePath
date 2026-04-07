@@ -1,4 +1,5 @@
 import { SettingsForm } from "@/components/dashboard/settings-form";
+import { normalizeLicenseTrack } from "@/lib/licensing/license-tracks";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function SettingsPage() {
@@ -11,7 +12,11 @@ export default async function SettingsPage() {
   }
 
   const [{ data: profile }, { data: clock }] = await Promise.all([
-    supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("full_name, license_track")
+      .eq("id", user.id)
+      .maybeSingle(),
     supabase
       .from("supervisee_license_clocks")
       .select("bbs_registration_at")
@@ -30,12 +35,14 @@ export default async function SettingsPage() {
           Settings
         </h1>
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          Name and BBS ASW registration date feed your dashboard countdown and
-          exports later on.
+          Your credential track tunes the AI hour-log reader for your state
+          board’s typical worksheets. Registration date feeds the dashboard
+          countdown and exports.
         </p>
       </div>
       <SettingsForm
         fullName={profile?.full_name ?? ""}
+        licenseTrack={normalizeLicenseTrack(profile?.license_track)}
         bbsRegistrationAt={reg}
         email={user.email ?? ""}
       />

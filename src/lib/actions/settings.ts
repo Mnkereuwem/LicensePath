@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 
+import {
+  isLicenseTrackId,
+  LICENSE_TRACK_IDS,
+} from "@/lib/licensing/license-tracks";
 import { ensureProfileForUser } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -10,6 +14,14 @@ export async function updateSuperviseeSettings(formData: FormData): Promise<
 > {
   const fullName = String(formData.get("full_name") ?? "").trim();
   const regRaw = String(formData.get("bbs_registration_at") ?? "").trim();
+  const licenseRaw = String(formData.get("license_track") ?? "").trim();
+
+  if (!isLicenseTrackId(licenseRaw)) {
+    return {
+      ok: false,
+      message: `Choose a valid license track (${LICENSE_TRACK_IDS.join(", ")}).`,
+    };
+  }
 
   if (!regRaw || !/^\d{4}-\d{2}-\d{2}$/.test(regRaw)) {
     return { ok: false, message: "Registration date must be YYYY-MM-DD." };
@@ -38,7 +50,10 @@ export async function updateSuperviseeSettings(formData: FormData): Promise<
 
   const { error: profileError } = await supabase
     .from("profiles")
-    .update({ full_name: fullName || null })
+    .update({
+      full_name: fullName || null,
+      license_track: licenseRaw,
+    })
     .eq("id", user.id);
 
   if (profileError) {

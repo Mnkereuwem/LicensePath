@@ -1,6 +1,6 @@
 import { HoursEditor } from "@/components/dashboard/hours-editor";
 import { startOfWeekMonday } from "@/lib/dates/week";
-import { fetchWeekHourValues } from "@/lib/data/dashboard-data";
+import { fetchHoursPageContext } from "@/lib/data/dashboard-data";
 
 /** OCR + PDF parsing can exceed the default function limit on Vercel. */
 export const maxDuration = 60;
@@ -16,7 +16,15 @@ export default async function LogHoursPage({
       ? sp.week
       : startOfWeekMonday();
 
-  const initial = await fetchWeekHourValues(week);
+  const ctx = await fetchHoursPageContext(week);
 
-  return <HoursEditor weekStart={week} initial={initial} />;
+  return (
+    <HoursEditor
+      weekStart={week}
+      initial={ctx.values}
+      weeklyCreditCap={ctx.weeklyCreditCap}
+      licenseTrackLabel={ctx.licenseTrackLabel}
+      rulesBlurb={ctx.rulesBlurb}
+    />
+  );
 }

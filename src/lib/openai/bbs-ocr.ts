@@ -2,6 +2,14 @@ import "server-only";
 
 import OpenAI, { toFile } from "openai";
 
+import {
+  buildPdfOcrSystemPrompt,
+  buildPdfOcrUserInstructions,
+  DEFAULT_LICENSE_TRACK,
+  normalizeLicenseTrack,
+  type LicenseTrackId,
+} from "@/lib/licensing/license-tracks";
+
 export type ParsedBbsEntry = {
   date: string;
   individual_supervision_hours: number;
@@ -9,30 +17,6 @@ export type ParsedBbsEntry = {
   clinical_hours: number;
   site_name: string | null;
 };
-
-const SYSTEM_PROMPT = `You extract structured hour data from experience-tracking documents. Prioritize California BBS forms (e.g. DCA BBS 37A-638 / ASW "Weekly Log of Experience Hours") but accept agency weekly grids, internship logs, or similar.
-
-BBS 37A-638 layout: columns are usually labeled "Week of:" with a date; rows include "Supervision, Individual or Triadic", "Supervision, Group", and clinical / psychosocial work. Letters A, A1, B, C and "Total Hours Per Week" may appear—use the cell that matches each category for that week column. Do not double-count: if instructions say a sub-row (e.g. A1) is excluded from weekly totals, follow the form.
-
-Mapping to output fields:
-- individual_supervision_hours: individual or triadic supervision hours for that week/date.
-- group_supervision_hours: group supervision for that week/date.
-- clinical_hours: direct clinical / client-contact / qualifying non-supervision hours for that week (sum sub-rows if needed, excluding pure supervision). If the sheet only shows one combined non-supervision total per week and breakdown is unclear, put that total here and put 0 in supervision fields unless supervision is listed separately.
-
-Return one JSON object with key "entries" (array, max 50). Each item:
-- "date": calendar date for that row/column in YYYY-MM-DD (normalize any US dates you read).
-- "individual_supervision_hours", "group_supervision_hours", "clinical_hours": numbers (0 if blank).
-- "site_name": worksite / employer / program name if visible, else empty string.
-
-Rules:
-- Read printed text, typed entries, and handwriting when possible.
-- Hour values are numeric only (decimals allowed). Treat blank/dash as 0.
-- One entry per distinct week/date column (or per dated row) that has at least one hour > 0 OR a clear week date—skip completely empty week columns.
-- If nothing is filled or legible, return {"entries": []}.
-- Do not invent dates. Skip illegible rows.
-- Output must match the requested JSON shape exactly.`;
-
-const PDF_USER_INSTRUCTIONS = `This PDF is an ASW/BBS weekly log, supervision sheet, or similar hour tracker. Use the full page layout (including handwriting and scanned content). Extract each "Week of" / week column (or dated row) into the schema. If multiple pages, merge into one entries list.`;
 
 /** Strict structured output schema for Responses API (site_name empty string when unknown). */
 const ENTRIES_RESPONSE_SCHEMA = {
@@ -226,7 +210,12 @@ function parseOpenAiJson(content: string): ParsedBbsEntry[] {
 
 export async function extractBbsEntriesFromText(
   documentText: string,
+  licenseTrack?: string | null,
 ): Promise<ParsedBbsEntry[]> {
+  const track: LicenseTrackId = normalizeLicenseTrack(
+    licenseTrack ?? DEFAULT_LICENSE_TRACK,
+  );
+  const system = buildPdfOcrSystemPrompt(track);
   const openai = new OpenAI({ apiKey: requireOpenAiKey() });
   const text = documentText.slice(0, MAX_PDF_TEXT_CHARS);
 
@@ -235,7 +224,7 @@ export async function extractBbsEntriesFromText(
     temperature: 0.1,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: system },
       {
         role: "user",
         content: `Extract rows from this tracking log text:\n\n${text}`,
@@ -261,7 +250,13 @@ function safePdfFileName(name: string): string {
 export async function extractBbsEntriesFromPdfBuffer(
   buffer: Buffer,
   fileName: string,
+  licenseTrack?: string | null,
 ): Promise<ParsedBbsEntry[]> {
+  const track: LicenseTrackId = normalizeLicenseTrack(
+    licenseTrack ?? DEFAULT_LICENSE_TRACK,
+  );
+  const system = buildPdfOcrSystemPrompt(track);
+  const userText = buildPdfOcrUserInstructions(track);
   const openai = new OpenAI({ apiKey: requireOpenAiKey() });
   const safeName = safePdfFileName(fileName);
 
@@ -273,13 +268,13 @@ export async function extractBbsEntriesFromPdfBuffer(
   try {
     const response = await openai.responses.create({
       model: "gpt-4o",
-      instructions: SYSTEM_PROMPT,
+      instructions: system,
       input: [
         {
           role: "user",
           content: [
             { type: "input_file", file_id: uploaded.id },
-            { type: "input_text", text: PDF_USER_INSTRUCTIONS },
+            { type: "input_text", text: userText },
           ],
         },
       ],

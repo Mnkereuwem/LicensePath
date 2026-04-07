@@ -12,8 +12,9 @@ export default function BbsScanPage() {
           Scan weekly log
         </h1>
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          LicensePath · mobile-optimized capture. Review and confirm before
-          records are added.
+          Choose your credential under Settings so the AI reader matches your
+          state’s typical hour logs. Review and confirm before records are
+          added.
         </p>
       </div>
       <BbsScanClient />

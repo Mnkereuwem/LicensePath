@@ -1,13 +1,14 @@
 import {
-  DIRECT_CLINICAL_MIN,
-  FACE_TO_FACE_MIN,
-  NON_CLINICAL_MAX,
-  TOTAL_HOURS_TARGET,
   capWeeklyCreditableHours,
   getSunsetDaysRemaining,
   getSunsetEndDate,
 } from "@/lib/compliance/bbs-rules";
+import { getTrackHourRules } from "@/lib/compliance/track-hour-rules";
 import type { DashboardModel } from "@/lib/dashboard/model";
+import {
+  getLicenseTrackOption,
+  normalizeLicenseTrack,
+} from "@/lib/licensing/license-tracks";
 import { startOfWeekMonday } from "@/lib/dates/week";
 import type { HourCategoryKey } from "@/lib/hours/categories";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -54,6 +55,17 @@ export async function fetchDashboardModel(): Promise<{
   if (!user) {
     return { model: null, warnings };
   }
+
+  const { data: profileLicense } = await supabase
+    .from("profiles")
+    .select("license_track")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const licenseTrack = normalizeLicenseTrack(profileLicense?.license_track);
+  const rules = getTrackHourRules(licenseTrack);
+  const licenseTrackLabel =
+    getLicenseTrackOption(licenseTrack)?.label ?? licenseTrack;
 
   const { data: rows, error: entriesError } = await supabase
     .from("weekly_hour_entries")
@@ -159,21 +171,35 @@ export async function fetchDashboardModel(): Promise<{
         groupSupervisionHours,
         rawTotalHours,
       },
-      cappedWeekTotal: capWeeklyCreditableHours(cappedWeekTotalRaw),
+      cappedWeekTotal: capWeeklyCreditableHours(
+        cappedWeekTotalRaw,
+        rules.weeklyCreditMaxPerWeek,
+      ),
       totalProgressPercent: Math.min(
         100,
-        Math.round((totalCredited / TOTAL_HOURS_TARGET) * 1000) / 10,
+        Math.round(
+          (totalCredited / rules.totalHoursTarget) * 1000,
+        ) / 10,
       ),
+      licenseTrack,
+      licenseTrackLabel,
+      weeklyCreditCap: rules.weeklyCreditMaxPerWeek,
+      sunsetYears: rules.sunsetYears,
+      rulesBlurb: rules.rulesBlurb,
       sunset: {
         registrationDate,
-        endDate: getSunsetEndDate(registrationDate),
-        daysRemaining: getSunsetDaysRemaining(registrationDate, now),
+        endDate: getSunsetEndDate(registrationDate, rules.sunsetYears),
+        daysRemaining: getSunsetDaysRemaining(
+          registrationDate,
+          now,
+          rules.sunsetYears,
+        ),
       },
       targets: {
-        total: TOTAL_HOURS_TARGET,
-        directMin: DIRECT_CLINICAL_MIN,
-        faceToFaceMin: FACE_TO_FACE_MIN,
-        nonClinicalMax: NON_CLINICAL_MAX,
+        total: rules.totalHoursTarget,
+        directMin: rules.directClinicalMin,
+        faceToFaceMin: rules.faceToFaceMin,
+        nonClinicalMax: rules.nonClinicalMax,
       },
     },
     warnings,
@@ -225,4 +251,69 @@ export async function fetchWeekHourValues(
   }
 
   return base;
+}
+
+/** Log hours page: week values + track-specific caps copy */
+export async function fetchHoursPageContext(weekStart: string): Promise<{
+  values: Record<HourCategoryKey, number>;
+  weeklyCreditCap: number;
+  rulesBlurb: string;
+  licenseTrackLabel: string;
+}> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const empty: Record<HourCategoryKey, number> = {
+    direct_clinical: 0,
+    face_to_face: 0,
+    non_clinical: 0,
+    individual_supervision: 0,
+    group_supervision: 0,
+    other: 0,
+  };
+
+  if (!user) {
+    const rules = getTrackHourRules("ca_asw");
+    return {
+      values: empty,
+      weeklyCreditCap: rules.weeklyCreditMaxPerWeek,
+      rulesBlurb: rules.rulesBlurb,
+      licenseTrackLabel: "California — ASW / ACSW (BBS)",
+    };
+  }
+
+  const [{ data: profileRow }, { data: weekRows, error }] = await Promise.all([
+    supabase.from("profiles").select("license_track").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("weekly_hour_entries")
+      .select("category, hours")
+      .eq("supervisee_id", user.id)
+      .eq("week_start", weekStart),
+  ]);
+
+  if (error && process.env.NODE_ENV === "development") {
+    console.warn("[fetchHoursPageContext]", describeSupabaseError(error));
+  }
+
+  const base = { ...empty };
+  for (const row of weekRows ?? []) {
+    const cat = row.category as HourCategoryKey;
+    if (cat in base) {
+      base[cat] = Number(row.hours) || 0;
+    }
+  }
+
+  const licenseTrack = normalizeLicenseTrack(profileRow?.license_track);
+  const rules = getTrackHourRules(licenseTrack);
+  const licenseTrackLabel =
+    getLicenseTrackOption(licenseTrack)?.label ?? licenseTrack;
+
+  return {
+    values: base,
+    weeklyCreditCap: rules.weeklyCreditMaxPerWeek,
+    rulesBlurb: rules.rulesBlurb,
+    licenseTrackLabel,
+  };
 }

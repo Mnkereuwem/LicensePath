@@ -2,10 +2,13 @@ import "server-only";
 
 import OpenAI from "openai";
 
+import { DEFAULT_EXPERIENCE_YEAR } from "@/lib/compliance/bbs-rules";
+import { getTrackHourRules } from "@/lib/compliance/track-hour-rules";
 import {
-  BBS_DAILY_CLINICAL_HOURS_MAX,
-  DEFAULT_EXPERIENCE_YEAR,
-} from "@/lib/compliance/bbs-rules";
+  buildScanVisionSystemPrompt,
+  normalizeLicenseTrack,
+  type LicenseTrackId,
+} from "@/lib/licensing/license-tracks";
 import type {
   BbsScanExtractedEntry,
   BbsScanFieldConfidence,
@@ -73,26 +76,20 @@ function clampHours(n: number): number {
   return Math.round(Math.min(n, 999) * 100) / 100;
 }
 
-const SYSTEM = `You read California BBS-style ASW weekly experience logs (form 37A-638 or similar) from a photograph.
-
-Return JSON only (no markdown) with key "entries": array (max 15). Each entry:
-- "work_date": string — calendar date for that row/column. Prefer YYYY-MM-DD. If the year is missing on the form, use ${DEFAULT_EXPERIENCE_YEAR}.
-- "direct_clinical_counseling_hours": number — face-to-face / direct clinical counseling and related clinical client-contact hours shown for that date (not supervision). Use 0 if blank.
-- "non_clinical_supervision_hours": number — group + individual supervision hours combined for that date, plus any other non-clinical supervision blocks if they are not already clinical. If the form separates individual vs group, sum them here. Use 0 if blank.
-- "supervised_site_name": string or null — employer / site / work setting if visible.
-- "confidence": object with numbers 0–1 for: "date", "clinical", "supervision", "site" — your estimate of read quality for each field.
-
-Rules:
-- Numbers only for hours; decimals allowed.
-- Do not invent dates: if a date cannot be read, omit that entry.
-- If nothing is legible return {"entries": []}.`;
-
 const VISION_TIMEOUT_MS = 90_000;
 
 export async function extractBbsRowsFromScanImage(input: {
   base64: string;
   mimeType: "image/jpeg" | "image/png" | "image/webp";
+  /** From profile; tailors prompt to board-specific hour logs */
+  licenseTrack?: string | null;
 }): Promise<BbsScanExtractedEntry[]> {
+  const track: LicenseTrackId = normalizeLicenseTrack(input.licenseTrack);
+  const trackRules = getTrackHourRules(track);
+  const system = buildScanVisionSystemPrompt({
+    track,
+    defaultExperienceYear: DEFAULT_EXPERIENCE_YEAR,
+  });
   const openai = new OpenAI({
     apiKey: requireOpenAiKey(),
     timeout: VISION_TIMEOUT_MS,
@@ -105,13 +102,13 @@ export async function extractBbsRowsFromScanImage(input: {
     temperature: 0.1,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: SYSTEM },
+      { role: "system", content: system },
       {
         role: "user",
         content: [
           {
             type: "text",
-            text: "Extract all readable day/week rows from this BBS weekly log photo into the JSON schema.",
+            text: "Extract all readable day/week rows from this hour log photo into the JSON schema.",
           },
           { type: "image_url", image_url: { url: dataUrl } },
         ],
@@ -154,9 +151,9 @@ export async function extractBbsRowsFromScanImage(input: {
         : Number(row.direct_clinical_counseling_hours),
     );
     let clinicalCapped = false;
-    if (clinical > BBS_DAILY_CLINICAL_HOURS_MAX) {
+    if (clinical > trackRules.dailyClinicalHoursMax) {
       clinicalCapped = true;
-      clinical = BBS_DAILY_CLINICAL_HOURS_MAX;
+      clinical = trackRules.dailyClinicalHoursMax;
     }
 
     const supervision = clampHours(
